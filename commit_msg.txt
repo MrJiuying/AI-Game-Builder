@@ -1,0 +1,9 @@
+feat: AI-Game-Builder initial version
+
+- Vue 3 + Tailwind frontend UI
+- FastAPI + WebSocket backend service
+- Python LLM providers (DeepSeek, Ollama, OpenAI)
+- Godot 4 ECS component library
+- EntityAssembler dynamic assembler
+- LiveLink WebSocket client
+- Complete AI -> JSON -> Godot assembly loop
