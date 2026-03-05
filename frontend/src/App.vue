@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import axios from 'axios'
 import AIControlPanel from './components/AIControlPanel.vue'
 import GameStage from './components/GameStage.vue'
 import AssetPanel from './components/AssetPanel.vue'
@@ -14,8 +15,7 @@ interface ChatMessage {
 interface GameAsset {
   id: number
   name: string
-  path: string
-  thumbnail: string
+  url: string
 }
 
 interface EntityProperty {
@@ -53,11 +53,8 @@ const imageProviders = [
   { id: 'cloud_sd', name: '云端 Serverless SD' },
 ]
 
-const gameAssets = ref<GameAsset[]>([
-  { id: 1, name: 'player.png', path: '/sprites/player.png', thumbnail: '🧙' },
-  { id: 2, name: 'enemy_skeleton.png', path: '/sprites/enemy_skeleton.png', thumbnail: '💀' },
-  { id: 3, name: 'gold_coin.png', path: '/sprites/gold_coin.png', thumbnail: '🪙' },
-])
+const gameAssets = ref<GameAsset[]>([])
+const abilityComponents = ref<string[]>([])
 
 const entityProperties = ref<EntityProperty[]>([
   { name: '移动速度 (Speed)', value: 300, min: 0, max: 1000 },
@@ -72,6 +69,8 @@ const godotWarningTimer = ref<number | null>(null)
 const selectedComponents = ref<string[]>([])
 const showSettingsModal = ref(false)
 const godotExePath = ref(localStorage.getItem('godot_path') || '')
+const sceneState = ref<Record<string, any>>({})
+const sceneStatePollTimer = ref<number | null>(null)
 
 onMounted(async () => {
   try {
@@ -209,6 +208,32 @@ const isModelConfigured = computed(() => {
 })
 
 const API_BASE_URL = 'http://localhost:8000'
+
+const fetchSceneState = async () => {
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/api/scene_state`)
+    sceneState.value = data && typeof data === 'object' ? data : {}
+  } catch {
+    sceneState.value = {}
+  }
+}
+
+const fetchAssets = async () => {
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/api/assets/list`)
+    const sprites = Array.isArray(data?.sprites) ? data.sprites : []
+    const components = Array.isArray(data?.components) ? data.components : []
+    gameAssets.value = sprites.map((item: any, index: number) => ({
+      id: index + 1,
+      name: item.name || `sprite_${index + 1}`,
+      url: `${API_BASE_URL}${item.url || ''}`,
+    }))
+    abilityComponents.value = components
+  } catch {
+    gameAssets.value = []
+    abilityComponents.value = []
+  }
+}
 
 const saveApiKeyConfig = async (value: string) => {
   if (currentModel.value !== 'deepseek') return
@@ -450,6 +475,21 @@ const sendMessageWithCheck = async () => {
   // 不阻止发送，让 AI 继续工作
   sendMessage()
 }
+
+onMounted(() => {
+  fetchAssets()
+  fetchSceneState()
+  sceneStatePollTimer.value = window.setInterval(() => {
+    fetchSceneState()
+  }, 1500)
+})
+
+onBeforeUnmount(() => {
+  if (sceneStatePollTimer.value) {
+    clearInterval(sceneStatePollTimer.value)
+    sceneStatePollTimer.value = null
+  }
+})
 </script>
 
 <template>
@@ -505,6 +545,7 @@ const sendMessageWithCheck = async () => {
     <aside class="w-1/4 min-w-[320px] flex flex-col bg-slate-900 border-l border-slate-700">
       <AssetPanel
         :assets="gameAssets"
+        :abilityComponents="abilityComponents"
         :entityProperties="entityProperties"
         :selectedEntity="selectedEntity"
         :selectedImageProvider="selectedImageProvider"
@@ -512,6 +553,7 @@ const sendMessageWithCheck = async () => {
         :imageProviders="imageProviders"
         :artApiKey="artApiKey"
         :artBaseUrl="artBaseUrl"
+        :sceneState="sceneState"
         :isTesting="isTesting"
         :testStatus="testStatus"
         @update-property="handlePropertyChange"

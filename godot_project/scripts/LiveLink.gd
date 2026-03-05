@@ -3,7 +3,7 @@ extends Node2D
 var socket = WebSocketPeer.new()
 var websocket_url = "ws://127.0.0.1:8000/ws"
 var was_connected = false
-var current_entity: Node2D = null
+var active_entities = {}
 
 # 这里定义了我们要上报给 AI 的属性白名单
 var _SYNC_PARAM_KEYS = ["max_speed", "acceleration", "friction", "max_health", "damage"]
@@ -48,28 +48,33 @@ func handle_message(msg: String):
 
 func spawn_entity(data: Dictionary):
 	print("【LiveLink】🏗️ 开始装配实体...")
-	
-	var config_path: String = data.get("config_path", "") as String
-	if config_path == "": return
-	
-	var global_config_path = ProjectSettings.globalize_path(config_path)
-	if not FileAccess.file_exists(global_config_path): return
-	
-	var file = FileAccess.open(global_config_path, FileAccess.READ)
-	var entity_data_text = file.get_as_text()
-	file.close()
-	
-	var entity_data = JSON.parse_string(entity_data_text)
-	if typeof(entity_data) != TYPE_DICTIONARY: return
-	
-	if current_entity and is_instance_valid(current_entity):
-		current_entity.queue_free()
-	
-	current_entity = CharacterBody2D.new()
-	# ✅ 保证节点名叫真实的 entity_name
+	var entity_data: Dictionary = {}
+	if data.has("entity_config") and data["entity_config"] is Dictionary:
+		entity_data = data["entity_config"] as Dictionary
+	else:
+		var config_path: String = data.get("config_path", "") as String
+		if config_path == "":
+			return
+		var global_config_path = ProjectSettings.globalize_path(config_path)
+		if not FileAccess.file_exists(global_config_path):
+			return
+		var file = FileAccess.open(global_config_path, FileAccess.READ)
+		var entity_data_text = file.get_as_text()
+		file.close()
+		var parsed = JSON.parse_string(entity_data_text)
+		if typeof(parsed) != TYPE_DICTIONARY:
+			return
+		entity_data = parsed as Dictionary
+
 	var e_name: String = entity_data.get("entity_name", "PreviewEntity") as String
-	current_entity.name = e_name
-	add_child(current_entity)
+	if active_entities.has(e_name):
+		var old_entity = active_entities[e_name]
+		if old_entity and is_instance_valid(old_entity):
+			old_entity.queue_free()
+
+	var entity_node = CharacterBody2D.new()
+	entity_node.name = e_name
+	add_child(entity_node)
 	
 	var sprite = Sprite2D.new()
 	sprite.name = "Sprite"
@@ -93,7 +98,7 @@ func spawn_entity(data: Dictionary):
 	if sprite.texture != null:
 		sprite.position = sprite.texture.get_size() / 2.0
 	
-	current_entity.add_child(sprite)
+	entity_node.add_child(sprite)
 	
 	var components = entity_data.get("components", [])
 	var component_params = entity_data.get("component_params", {})
@@ -108,12 +113,11 @@ func spawn_entity(data: Dictionary):
 				var params = component_params.get(comp_name, {})
 				for param_key in params.keys():
 					comp_node.set(param_key, params[param_key])
-				current_entity.add_child(comp_node)
+				entity_node.add_child(comp_node)
 	
-	current_entity.global_position = get_viewport_rect().size / 2.0
+	entity_node.global_position = get_viewport_rect().size / 2.0
+	active_entities[e_name] = entity_node
 	print("【LiveLink】🎉 实体降临！")
-	
-	# ✅ 降临完毕，通知 AI 睁眼！
 	sync_scene_state()
 
 func update_entity_component(data: Dictionary):
@@ -121,41 +125,45 @@ func update_entity_component(data: Dictionary):
 	var target_entity: String = data.get("entity_name", "") as String
 	var comp_name: String = data.get("component_name", "") as String
 	var params: Dictionary = data.get("parameters", {}) as Dictionary
-	
-	if current_entity and current_entity.name == target_entity:
-		var comp_node = current_entity.get_node_or_null(comp_name)
-		if comp_node:
-			for param_key in params.keys():
-				comp_node.set(param_key, params[param_key])
-			print("【LiveLink】⚡ 属性热更成功！")
-			# ✅ 修改完毕，通知 AI 睁眼更新记忆！
-			sync_scene_state()
+
+	if not active_entities.has(target_entity):
+		return
+	var entity_node = active_entities[target_entity]
+	if not entity_node or not is_instance_valid(entity_node):
+		return
+	var comp_node = entity_node.get_node_or_null(comp_name)
+	if comp_node:
+		for param_key in params.keys():
+			comp_node.set(param_key, params[param_key])
+		print("【LiveLink】⚡ 属性热更成功！")
+		sync_scene_state()
 
 func sync_scene_state() -> void:
-	if current_entity == null or not is_instance_valid(current_entity):
+	var entities_packet: Array = []
+	for entity_name in active_entities.keys():
+		var entity_node = active_entities[entity_name]
+		if entity_node == null or not is_instance_valid(entity_node):
+			continue
+		var sync_data_packet: Dictionary = {
+			"name": entity_node.name,
+			"components": {},
+		}
+		for child in entity_node.get_children():
+			if child is Sprite2D:
+				continue
+			var comp_node: Node = child as Node
+			var comp_params: Dictionary = {}
+			for k in _SYNC_PARAM_KEYS:
+				if k in comp_node:
+					comp_params[k] = comp_node.get(k)
+			sync_data_packet["components"][comp_node.name] = comp_params
+		entities_packet.append(sync_data_packet)
+	if entities_packet.is_empty():
 		return
-	
-	var sync_data_packet: Dictionary = {
-		"name": current_entity.name,
-		"components": {},
-	}
-	
-	for child in current_entity.get_children():
-		if child is Sprite2D: continue
-		
-		var comp_node: Node = child as Node
-		var comp_params: Dictionary = {}
-		
-		for k in _SYNC_PARAM_KEYS:
-			if k in comp_node:
-				comp_params[k] = comp_node.get(k)
-		
-		sync_data_packet["components"][comp_node.name] = comp_params
-	
 	var final_sync_msg: Dictionary = {
 		"action": "sync_state",
 		"data": {
-			"entities": [sync_data_packet]
+			"entities": entities_packet
 		}
 	}
 	

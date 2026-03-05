@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import logging
@@ -43,9 +44,13 @@ app.add_middleware(
 )
 
 GODOT_PROJECT_PATH = Path(__file__).parent / "godot_project"
+SPRITES_PATH = GODOT_PROJECT_PATH / "assets" / "sprites"
+COMPONENTS_PATH = GODOT_PROJECT_PATH / "components"
+STAGE_SAVE_PATH = Path(__file__).parent / "stage_save.json"
 
 project_manager = ProjectResourceManager(str(GODOT_PROJECT_PATH))
 image_coordinator = ImageGeneratorCoordinator()
+app.mount("/static/sprites", StaticFiles(directory=str(SPRITES_PATH)), name="static_sprites")
 
 
 class ConnectionManager:
@@ -154,6 +159,83 @@ def _upsert_env_key(file_path: Path, key: str, value: str) -> None:
     file_path.write_text("\n".join(updated_lines) + "\n", encoding="utf-8")
 
 
+def _load_stage_save() -> Dict[str, Dict[str, Any]]:
+    if not STAGE_SAVE_PATH.exists():
+        return {}
+    try:
+        data = json.loads(STAGE_SAVE_PATH.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_stage_save(data: Dict[str, Dict[str, Any]]) -> None:
+    STAGE_SAVE_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _upsert_saved_spawn(entity_data: Dict[str, Any]) -> None:
+    entity_name = str(entity_data.get("entity_name", "")).strip()
+    if not entity_name:
+        return
+    stage_data = _load_stage_save()
+    stage_data[entity_name] = entity_data
+    _write_stage_save(stage_data)
+
+
+def _upsert_saved_update(action_data: Dict[str, Any]) -> None:
+    entity_name = str(action_data.get("entity_name", "")).strip()
+    component_name = str(action_data.get("component_name", "")).strip()
+    parameters = action_data.get("parameters", {})
+    if not entity_name or not component_name or not isinstance(parameters, dict):
+        return
+
+    stage_data = _load_stage_save()
+    current = stage_data.get(entity_name, {})
+    if not isinstance(current, dict):
+        current = {}
+
+    components = current.get("components", [])
+    if not isinstance(components, list):
+        components = []
+    if component_name not in components:
+        components.append(component_name)
+
+    component_params = current.get("component_params", {})
+    if not isinstance(component_params, dict):
+        component_params = {}
+    existing_params = component_params.get(component_name, {})
+    if not isinstance(existing_params, dict):
+        existing_params = {}
+    existing_params.update(parameters)
+    component_params[component_name] = existing_params
+
+    current["entity_name"] = entity_name
+    current["base_type"] = current.get("base_type", "CharacterBody2D")
+    current["components"] = components
+    current["component_params"] = component_params
+    current["sprite_path"] = current.get("sprite_path", "")
+    current["metadata"] = current.get("metadata", {})
+
+    stage_data[entity_name] = current
+    _write_stage_save(stage_data)
+
+
+async def _restore_stage_for_connection(websocket: WebSocket) -> None:
+    stage_data = _load_stage_save()
+    if not stage_data:
+        return
+    for entity_name, entity_config in stage_data.items():
+        if not isinstance(entity_config, dict):
+            continue
+        await websocket.send_json(
+            {
+                "action": "spawn_entity",
+                "entity_name": entity_name,
+                "entity_config": entity_config,
+            }
+        )
+
+
 @app.get("/")
 async def root():
     return {
@@ -172,9 +254,41 @@ async def health_check():
     }
 
 
+@app.get("/api/scene_state")
+async def get_scene_state():
+    state = getattr(memory_manager, "current_scene_state", None)
+    if isinstance(state, dict):
+        return state
+    return {}
+
+
+@app.get("/api/assets/list")
+async def list_assets_full():
+    if not SPRITES_PATH.exists():
+        sprites = []
+    else:
+        allowed = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+        sprites = [
+            {
+                "name": p.name,
+                "url": f"/static/sprites/{p.name}",
+            }
+            for p in sorted(SPRITES_PATH.iterdir())
+            if p.is_file() and p.suffix.lower() in allowed
+        ]
+
+    if not COMPONENTS_PATH.exists():
+        components = []
+    else:
+        components = sorted([p.stem for p in COMPONENTS_PATH.glob("*.gd") if p.is_file()])
+
+    return {"sprites": sprites, "components": components}
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
+    await _restore_stage_for_connection(websocket)
 
     async def listen_incoming() -> None:
         while True:
@@ -282,6 +396,7 @@ async def generate_entity(request: GenerateEntityRequest):
                 action_data = result.get("data", {})
                 if not isinstance(action_data, dict):
                     raise ValueError("update_component data must be a dict")
+                _upsert_saved_update(action_data)
 
                 await manager.broadcast(action_data)
 
@@ -317,6 +432,7 @@ async def generate_entity(request: GenerateEntityRequest):
             
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(json_data, f, ensure_ascii=False, indent=2)
+            _upsert_saved_spawn(json_data)
             
             logger.info(f"实体配置已保存: {config_path}")
             

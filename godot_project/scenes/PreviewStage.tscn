@@ -1,9 +1,9 @@
-[gd_scene format=3 uid="uid://qlk60dv631uo"]
+[gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" uid="uid://boi07mgs1texw" path="res://scripts/LiveLink.gd" id="1_link"]
+[ext_resource type="Script" path="res://scripts/LiveLink.gd" id="1_link"]
 
-[node name="PreviewStage" type="Node2D" unique_id=2005721169]
+[node name="PreviewStage" type="Node2D"]
 script = ExtResource("1_link")
 
-[node name="Camera2D" type="Camera2D" parent="." unique_id=227715955]
+[node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(576, 324)
