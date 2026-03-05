@@ -1,7 +1,7 @@
 [
   {
     "role": "user",
-    "content": "制作一个狐狸",
+    "content": "生成一个怪物",
     "mode": "build"
   },
   {
@@ -11,7 +11,57 @@
   },
   {
     "role": "user",
-    "content": "制作一个狐狸",
+    "content": "生成一个怪物",
+    "mode": "build"
+  },
+  {
+    "role": "assistant",
+    "content": "生成了实体 EnemySkeleton，包含组件: ['VelocityComponent', 'HealthComponent', 'HitboxComponent']",
+    "mode": "build"
+  },
+  {
+    "role": "user",
+    "content": "生成一个怪物",
+    "mode": "build"
+  },
+  {
+    "role": "assistant",
+    "content": "生成了实体 EnemySkeleton，包含组件: ['VelocityComponent', 'HealthComponent', 'HitboxComponent']",
+    "mode": "build"
+  },
+  {
+    "role": "user",
+    "content": "生成一个名叫 Assassin 的刺客，挂载移动组件，基础速度设为 100",
+    "mode": "build"
+  },
+  {
+    "role": "assistant",
+    "content": "生成了实体 EnemySkeleton，包含组件: ['VelocityComponent', 'HealthComponent', 'HitboxComponent']",
+    "mode": "build"
+  },
+  {
+    "role": "user",
+    "content": "把 Assassin 的速度提升到 800",
+    "mode": "build"
+  },
+  {
+    "role": "assistant",
+    "content": "生成了实体 EnemySkeleton，包含组件: ['VelocityComponent', 'HealthComponent', 'HitboxComponent']",
+    "mode": "build"
+  },
+  {
+    "role": "user",
+    "content": "生成一个名叫 Goblin 的哥布林，挂载移动组件，基础速度设为 50",
+    "mode": "build"
+  },
+  {
+    "role": "assistant",
+    "content": "生成了实体 EnemySkeleton，包含组件: ['VelocityComponent', 'HealthComponent', 'HitboxComponent']",
+    "mode": "build"
+  },
+  {
+    "role": "user",
+    "content": "生成一个名叫 Goblin 的哥布林，挂载移动组件，基础速度设为 50",
     "mode": "build"
   },
   {

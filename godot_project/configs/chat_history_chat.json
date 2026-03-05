@@ -43,5 +43,25 @@
     "role": "assistant",
     "content": "好的，我很乐意和你聊聊游戏设定！请问你想探讨什么内容？",
     "mode": "chat"
+  },
+  {
+    "role": "user",
+    "content": "你好",
+    "mode": "chat"
+  },
+  {
+    "role": "assistant",
+    "content": "[DeepSeek mock] 已收到指令，将生成适当的回复。用户输入: 你好",
+    "mode": "chat"
+  },
+  {
+    "role": "user",
+    "content": "场上现在有什么怪物？它的移动速度是多少？",
+    "mode": "chat"
+  },
+  {
+    "role": "assistant",
+    "content": "[DeepSeek mock] 已收到指令，将生成适当的回复。用户输入: \n\n【当前 Godot 引擎实时状态反馈】：{\"entities\": [{\"components\": {\"HealthComponent\": {\"max_health\": 50.0}, \"HitboxComponent\": {\"damage\": 10.0}, \"VelocityComponent\": {\"acceleration\": 800.0, \"friction\": 600.0, \"max_speed\": 150.0}}, \"name\": \"EnemySkeleton\"}]}\n\n用户输入：场上现在有什么怪物？它的移动速度是多少？",
+    "mode": "chat"
   }
 ]

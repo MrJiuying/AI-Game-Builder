@@ -2,8 +2,8 @@
 
 [ext_resource type="Script" uid="uid://boi07mgs1texw" path="res://scripts/LiveLink.gd" id="1_link"]
 
-[node name="PreviewStage" type="Node2D" unique_id=2005721169]
+[node name="PreviewStage" type="Node2D" unique_id=281409287]
 script = ExtResource("1_link")
 
-[node name="Camera2D" type="Camera2D" parent="." unique_id=227715955]
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1605639451]
 position = Vector2(576, 324)

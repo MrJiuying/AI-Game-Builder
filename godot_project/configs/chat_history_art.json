@@ -8,5 +8,15 @@
     "role": "assistant",
     "content": "生成了美术资产，提示词: 好的，我很乐意和你聊聊游戏设定！请问你想探讨什么内容？",
     "mode": "art"
+  },
+  {
+    "role": "user",
+    "content": "给我张狐狸",
+    "mode": "art"
+  },
+  {
+    "role": "assistant",
+    "content": "生成了美术资产，提示词: [DeepSeek mock] 已收到指令，将生成适当的回复。用户输入: 用户需求：给我张狐狸",
+    "mode": "art"
   }
 ]
