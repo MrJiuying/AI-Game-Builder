@@ -67,6 +67,8 @@ const entityProperties = ref<EntityProperty[]>([
 const selectedEntity = ref('TestPlayer')
 const isPlaying = ref(false)
 const isGodotLaunched = ref(false)
+const showGodotWarning = ref(false)
+const godotWarningTimer = ref<number | null>(null)
 const selectedComponents = ref<string[]>([])
 const showSettingsModal = ref(false)
 const godotExePath = ref(localStorage.getItem('godot_path') || '')
@@ -299,17 +301,32 @@ const selectGodotFile = async () => {
 }
 
 const sendMessageWithCheck = async () => {
-  if (!isGodotLaunched.value) {
-    const shouldLaunch = window.confirm('⚠️ 检测到预览引擎未启动。您将无法实时看到生成的实体。是否立即自动为您启动 Godot？')
-    if (shouldLaunch) {
-      await launchGodot()
+  // chat 和 art 模式下不检查 Godot 状态
+  if (currentMode.value === 'build' && !isGodotLaunched.value) {
+    // 显示非阻塞警告提示
+    showGodotWarning.value = true
+    if (godotWarningTimer.value) {
+      clearTimeout(godotWarningTimer.value)
     }
+    godotWarningTimer.value = window.setTimeout(() => {
+      showGodotWarning.value = false
+    }, 5000)
   }
+  // 不阻止发送，让 AI 继续工作
   sendMessage()
 }
 </script>
 
 <template>
+  <!-- 非阻塞警告提示 -->
+  <div v-if="showGodotWarning" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
+    <div class="bg-amber-900/90 border border-amber-500 text-amber-100 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3">
+      <span>⚠️</span>
+      <span class="text-sm">Godot 预览未启动，本次生成的实体将保存在后台图纸中。随时可点击下方按钮启动预览。</span>
+      <button @click="showGodotWarning = false" class="text-amber-300 hover:text-white">✕</button>
+    </div>
+  </div>
+
   <div class="h-screen w-screen flex bg-slate-950 text-gray-200 overflow-hidden">
     <!-- 左侧边栏：AI 核心控制舱 -->
     <aside class="w-1/4 min-w-[320px] flex flex-col bg-slate-900 border-r border-slate-700">
