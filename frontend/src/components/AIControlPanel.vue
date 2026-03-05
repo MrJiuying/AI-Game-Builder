@@ -70,6 +70,13 @@ watch(() => props.chatMessages.length, () => {
   }, 50)
 })
 
+watch(() => props.currentMode, () => {
+  setTimeout(() => {
+    const input = document.querySelector('.chat-input') as HTMLInputElement
+    if (input) input.focus()
+  }, 100)
+})
+
 const currentPlaceholder = computed(() => {
   const mode = modes.find(m => m.id === props.currentMode)
   return mode?.placeholder || '描述你想要的游戏内容...'
@@ -313,7 +320,7 @@ watch(
             @keydown="handleKeydown"
             :placeholder="isModelConfigured ? currentPlaceholder : '请先在上方配置模型与 API Key...'"
             :disabled="isLoading"
-            class="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-sm text-gray-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+            class="chat-input flex-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-sm text-gray-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
           />
           <button
             @click="emit('send')"

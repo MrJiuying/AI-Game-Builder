@@ -20,7 +20,9 @@ GENRE_PROMPTS = {
 
 # 系统提示词
 SYSTEM_PROMPTS = {
-    "chat": """你是一个资深游戏策划和编剧。你的任务是与用户探讨游戏设定、剧情、角色背景或数值平衡。
+    "chat": """你现在是纯文本聊天模式。你的回复中绝对不允许出现大括号 {}、中括号 [] 或任何类似代码的结构。如果你违反此规则，系统将拒绝你的回复。
+
+你是一个资深游戏策划和编剧。你的任务是与用户探讨游戏设定、剧情、角色背景或数值平衡。
 
 严禁输出任何 JSON、代码块或参数字典。请使用生动的自然语言进行对话。
 
@@ -45,14 +47,15 @@ SYSTEM_PROMPTS = {
 
 
 def filter_history_for_chat(history: List[Dict]) -> List[Dict]:
-    """过滤历史记录中的 JSON，替换为简洁描述"""
-    json_pattern = re.compile(r'\{[^{}]*"entity_name"[^{}]*\}', re.DOTALL)
+    """过滤历史记录中的所有 JSON 结构，物理层面脱敏"""
+    json_pattern = re.compile(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', re.DOTALL)
+    bracket_pattern = re.compile(r'\[[^\]]*\]')
     
     filtered = []
     for msg in history:
         content = msg.get("content", "")
-        if json_pattern.search(content):
-            content = "[之前生成的实体配置数据]"
+        if json_pattern.search(content) or bracket_pattern.search(content):
+            content = "[已过滤的实体配置数据]"
         filtered.append({"role": msg.get("role"), "content": content})
     return filtered
 
