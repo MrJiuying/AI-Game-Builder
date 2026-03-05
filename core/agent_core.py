@@ -11,6 +11,16 @@ from core.memory_manager import memory_manager
 
 logger = logging.getLogger(__name__)
 
+def _format_scene_state_for_prompt() -> str:
+    state = getattr(memory_manager, "current_scene_state", None)
+    if not state:
+        return ""
+    try:
+        payload = json.dumps(state, ensure_ascii=False)
+    except TypeError:
+        payload = str(state)
+    return f"\n\n【当前 Godot 引擎实时状态反馈】：{payload}\n"
+
 
 # 游戏底座规则注册表
 GENRE_PROMPTS = {
@@ -90,6 +100,10 @@ async def handle_chat_mode(llm_provider: AgentCoordinator, user_text: str) -> Di
     
     history = memory_manager.get_messages_for_llm("chat")
     filtered_history = filter_history_for_chat(history)
+
+    scene_state_prompt = _format_scene_state_for_prompt()
+    if scene_state_prompt:
+        user_text = f"{scene_state_prompt}\n用户输入：{user_text}"
     
     response = await llm_provider._llm_provider.generate_text(
         system_prompt=SYSTEM_PROMPTS['chat'],
@@ -166,7 +180,7 @@ async def handle_build_mode(llm_provider: AgentCoordinator, user_text: str,
     logger.info(f"【Build模式】正在调用 {provider_name} 处理实体生成请求")
     
     system_prompt = _build_build_system_prompt(game_base, required_components)
-    full_prompt = f"{system_prompt}\n\n用户需求：{user_text}"
+    full_prompt = f"{system_prompt}{_format_scene_state_for_prompt()}\n\n用户需求：{user_text}"
     
     history = memory_manager.get_messages_for_llm("build")
     

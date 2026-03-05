@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 logger = logging.getLogger(__name__)
 
@@ -10,6 +10,12 @@ class MemoryManager:
     def __init__(self, storage_dir: str = "godot_project/configs"):
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
+        # Godot 端实时状态同步（长期记忆的一部分）
+        self.current_scene_state: Dict[str, Any] = {}
+
+    def update_scene_state(self, state: Dict[str, Any]) -> None:
+        self.current_scene_state = state or {}
+        logger.info("已更新 current_scene_state")
     
     def _get_storage_path(self, mode: str = "build") -> Path:
         return self.storage_dir / f"chat_history_{mode}.json"

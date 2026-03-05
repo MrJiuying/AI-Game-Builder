@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import logging
 import json
+import asyncio
 import uuid
 import subprocess
 import os
@@ -144,18 +145,32 @@ async def health_check():
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
-    try:
+
+    async def listen_incoming() -> None:
         while True:
             data = await websocket.receive_text()
             try:
                 message = json.loads(data)
-                logger.info(f"收到 WebSocket 消息: {message}")
-                
-                if message.get("action") == "ping":
-                    await websocket.send_json({"action": "pong"})
             except json.JSONDecodeError:
                 logger.warning(f"收到无效 JSON: {data}")
-                
+                continue
+
+            action = message.get("action")
+            if action == "ping":
+                await websocket.send_json({"action": "pong"})
+            elif action == "sync_state":
+                state_data = message.get("data", {})
+                if isinstance(state_data, dict):
+                    memory_manager.update_scene_state(state_data)
+                    logger.info("收到 sync_state，已写入 MemoryManager.current_scene_state")
+                else:
+                    logger.warning(f"sync_state.data 不是 dict: {state_data}")
+            else:
+                logger.info(f"收到未知 action: {action}")
+
+    try:
+        listener_task = asyncio.create_task(listen_incoming())
+        await listener_task
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception as e:
