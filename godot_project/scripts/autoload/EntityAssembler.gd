@@ -173,6 +173,9 @@ func _inject_parameters(component: Node, params: Dictionary) -> void:
 func _load_sprite(entity: Node2D, json_data: Dictionary) -> void:
 	"""
 	如果 JSON 中指定了 sprite_path，则动态加载并挂载 Sprite2D
+	支持两种路径格式：
+	1. res://xxx.png - Godot 资源路径（需要 .import 文件）
+	2. 绝对路径如 C:/xxx/xxx.png 或包含 res:// 的路径（动态加载）
 	"""
 	var sprite_path: Variant = json_data.get("sprite_path")
 	
@@ -183,24 +186,45 @@ func _load_sprite(entity: Node2D, json_data: Dictionary) -> void:
 		push_warning("[EntityAssembler] sprite_path 必须是字符串")
 		return
 	
-	if not ResourceLoader.exists(sprite_path):
-		push_warning("[EntityAssembler]  sprite_path 不存在: %s" % sprite_path)
-		return
-	
-	var texture: Texture2D = load(sprite_path)
-	if texture == null:
-		push_warning("[EntityAssembler] 纹理加载失败: %s" % sprite_path)
-		return
-	
 	var sprite: Sprite2D = Sprite2D.new()
 	sprite.name = "Sprite"
-	sprite.texture = texture
 	
-	if texture.get_size() != Vector2.ZERO:
-		sprite.position = texture.get_size() / 2.0
+	# 检测是否是外部绝对路径（需要动态加载）
+	if sprite_path.begins_with("/") or (sprite_path.length() > 2 and sprite_path[1] == ":"):
+		# 绝对路径
+		var real_path = sprite_path
+		var img = Image.new()
+		var err = img.load(real_path)
+		if err == OK:
+			sprite.texture = ImageTexture.create_from_image(img)
+			if sprite.texture.get_size() != Vector2.ZERO:
+				sprite.position = sprite.texture.get_size() / 2.0
+			_logger.info("动态加载外部图片: %s" % real_path)
+		else:
+			push_warning("[EntityAssembler] 外部图片加载失败: %s，尝试使用 Godot 资源路径" % real_path)
+			sprite_path = ""  # 回退到 res:// 路径检查
+	elif sprite_path.begins_with("res://"):
+		# Godot 资源路径
+		if not ResourceLoader.exists(sprite_path):
+			push_warning("[EntityAssembler] sprite_path 不存在: %s" % sprite_path)
+			sprite_path = ""
+	
+	# 如果没有有效的 sprite_path，加载默认图标
+	if sprite_path == "" or sprite_path == null:
+		sprite.texture = load("res://icon.svg")
+	else:
+		# 尝试使用 load() 加载 Godot 资源
+		var texture: Texture2D = load(sprite_path)
+		if texture != null:
+			sprite.texture = texture
+			if texture.get_size() != Vector2.ZERO:
+				sprite.position = texture.get_size() / 2.0
+		else:
+			push_warning("[EntityAssembler] 纹理加载失败: %s，使用默认图标" % sprite_path)
+			sprite.texture = load("res://icon.svg")
 	
 	entity.add_child(sprite)
-	_logger.info("已加载纹理: %s -> %s" % [sprite_path, entity.name])
+	_logger.info("已设置精灵纹理: %s -> %s" % [sprite.texture, entity.name])
 
 
 func build_entity_from_dict(json_data: Dictionary) -> Node2D:
@@ -211,13 +235,17 @@ func build_entity_from_dict(json_data: Dictionary) -> Node2D:
 	if json_data.is_empty():
 		push_error("[EntityAssembler] 空字典无法构建实体")
 		return null
-	
+
 	var entity: Node2D = _create_base_node(json_data)
 	if entity == null:
 		return null
-	
+
 	_mount_components(entity, json_data)
 	_load_sprite(entity, json_data)
+	
+	# 强制居中到屏幕中央
+	if Engine.get_main_loop() != null:
+		entity.global_position = Engine.get_main_loop().get_root().get_viewport_rect().size / 2.0
 	
 	return entity
 

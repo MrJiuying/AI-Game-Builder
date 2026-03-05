@@ -1,6 +1,6 @@
 # AI-Game-Builder
 
-> 版本: 0.0.1 | 将自然语言转化为 Godot 4.x 引擎的 2D 游戏实体
+> 版本: 0.0.2 | 将自然语言转化为 Godot 4.x 引擎的 2D 游戏实体
 
 一个数据驱动的 AI 游戏装配平台，通过自然语言描述自动生成 Godot 4 游戏实体。
 
@@ -128,6 +128,17 @@ npm run dev
 - **AI**: DeepSeek, OpenAI, Ollama
 
 ## 版本历史
+
+### v0.0.2 (2026-03-05)
+- 完善 Godot 4 WebSocket 通讯 (LiveLink.gd)
+- 添加实体动态组件挂载能力
+- 支持 AI 图像生成 (Local SD / DALL-E 3 / Cloud SD)
+- 添加游戏基底 (genre) 上下文约束
+- 添加动态能力组件库选择 UI
+- 添加 Godot 一键启动功能 (编辑器模式)
+- 添加本地 SD 代理绕过和超时优化
+- 添加项目配置文件 (project.godot) 自动生成
+- 修复多个 bug 并优化稳定性
 
 ### v0.0.1 (2026-03-04)
 - 初始版本

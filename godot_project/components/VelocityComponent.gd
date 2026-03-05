@@ -1,39 +1,31 @@
 extends Node
 class_name VelocityComponent
 
-## 移动控制组件 - 处理 2D 俯视角的 8 向移动、加速和摩擦力缓冲
+var max_speed: float = 300.0
+var acceleration: float = 1500.0
+var friction: float = 1200.0
 
-@export var max_speed: float = 300.0
-@export var acceleration: float = 1000.0
-@export var friction: float = 800.0
+func _ready():
+	var parent = get_parent()
+	print("【VelocityComponent】🏃 移动大脑已启动！我附身的肉体是: ", parent.name, " | 类型: ", parent.get_class())
 
-var current_velocity: Vector2 = Vector2.ZERO
-
-func move(entity: CharacterBody2D, direction: Vector2) -> void:
-	"""
-	处理实体移动逻辑
-	调用时机：在父节点的 _physics_process 中每帧调用
+func _physics_process(delta: float) -> void:
+	var parent = get_parent()
 	
-	参数:
-		entity: CharacterBody2D 类型的实体节点
-		direction: 输入方向向量（归一化）
-	"""
-	if direction != Vector2.ZERO:
-		# 有输入时：应用加速度向目标方向移动
-		current_velocity = current_velocity.move_toward(
-			direction * max_speed, 
-			acceleration * delta_time()
-		)
+	if parent is CharacterBody2D:
+		var input_dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+		
+		if input_dir != Vector2.ZERO:
+			print("【VelocityComponent】⌨️ 侦测到键盘输入: ", input_dir)
+			parent.velocity = parent.velocity.move_toward(input_dir * max_speed, acceleration * delta)
+		else:
+			parent.velocity = parent.velocity.move_toward(Vector2.ZERO, friction * delta)
+			
+		parent.move_and_slide()
+		
+		if parent.velocity.length() > 0.1:
+			print("【VelocityComponent】🚀 狂奔中！当前速度: ", parent.velocity, " | 实时坐标: ", parent.global_position)
+			
 	else:
-		# 无输入时：应用摩擦力减速
-		current_velocity = current_velocity.move_toward(
-			Vector2.ZERO, 
-			friction * delta_time()
-		)
-	
-	entity.velocity = current_velocity
-	entity.move_and_slide()
-
-func delta_time() -> float:
-	"""获取帧时间，确保在不同帧率下运动一致"""
-	return get_process_delta_time()
+		print("【VelocityComponent】❌ 夭寿啦！我没挂在 CharacterBody2D 身上！")
+		set_physics_process(false)

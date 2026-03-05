@@ -9,6 +9,14 @@ from core.models import EntityConfig, ComponentConfig
 logger = logging.getLogger(__name__)
 
 
+# 游戏底座规则注册表
+GENRE_PROMPTS = {
+    "top_down_rpg": "当前项目为【俯视角 RPG】。实体在 2D 平面上自由移动，无重力。你必须配置的专属组件参数：TopDownMovementComponent (需提供 max_speed, acceleration, friction), CollisionGeneratorComponent (需提供 shape_type, radius, size_x, size_y)。",
+    "platformer": "当前项目为【2D 横版跳跃】。实体受重力影响。可用专属核心组件：PlatformerMovementComponent (参数: speed, jump_force, gravity), PlatformerHitbox。",
+    "top_down_shooter": "当前项目为【俯视角射击】。可用专属核心组件：AimingComponent, ProjectileEmitterComponent。"
+}
+
+
 class AgentCoordinator:
     def __init__(self, llm_provider: BaseLLMProvider):
         self._llm_provider = llm_provider
@@ -30,7 +38,7 @@ class AgentCoordinator:
     "metadata": { ... }
 }
 
-可用的组件类型：
+通用组件：
 - VelocityComponent: max_speed, acceleration, friction
 - HealthComponent: max_health
 - HitboxComponent: damage
@@ -38,10 +46,21 @@ class AgentCoordinator:
 
 请直接输出 JSON，不要包含任何解释或 markdown 标记。"""
 
-    async def process_user_intent(self, user_text: str) -> EntityConfig:
-        full_prompt = f"{self._system_prompt}\n\n用户需求：{user_text}"
+    async def process_user_intent(self, user_text: str, game_base: Optional[str] = "top-down-rpg", required_components: Optional[list] = None) -> EntityConfig:
+        # 获取游戏底座规则
+        genre_prompt = GENRE_PROMPTS.get(game_base, "")
         
-        logger.info(f"正在调用 {self._llm_provider.get_provider_name()} 处理请求...")
+        # 构建完整的系统提示
+        full_system_prompt = f"{self._system_prompt}\n\n{genre_prompt}\n\n你必须严格遵守当前底座的物理规则，且只能从上述可用组件中选择来组装 JSON。"
+        
+        # 添加必需组件到提示
+        if required_components and len(required_components) > 0:
+            components_text = ", ".join(required_components)
+            user_text += f"\n\n用户已强制要求挂载以下组件：{components_text}。你在生成的 JSON components 列表中必须且只能包含这些组件，并在 component_params 中为它们分配合理的数值。"
+        
+        full_prompt = f"{full_system_prompt}\n\n用户需求：{user_text}"
+        
+        logger.info(f"正在调用 {self._llm_provider.get_provider_name()} 处理请求，游戏底座: {game_base}")
         
         json_string = await self._llm_provider.generate_entity_schema(full_prompt)
         

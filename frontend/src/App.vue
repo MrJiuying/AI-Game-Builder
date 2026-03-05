@@ -39,6 +39,18 @@ const apiKey = ref('')
 const inputMessage = ref('')
 const selectedGameType = ref('top-down-rpg')
 const isLoading = ref(false)
+const selectedImageProvider = ref('local_sd')
+const customLora = ref('')
+const artApiKey = ref('')
+const artBaseUrl = ref('')
+const isTesting = ref(false)
+const testStatus = ref<{ status: 'idle' | 'success' | 'error'; message: string }>({ status: 'idle', message: '' })
+
+const imageProviders = [
+  { id: 'local_sd', name: '本地 SD WebUI' },
+  { id: 'dalle3', name: 'DALL-E 3 云端' },
+  { id: 'cloud_sd', name: '云端 Serverless SD' },
+]
 
 const gameAssets = ref<GameAsset[]>([
   { id: 1, name: 'player.png', path: '/sprites/player.png', thumbnail: '🧙' },
@@ -53,11 +65,15 @@ const entityProperties = ref<EntityProperty[]>([
 
 const selectedEntity = ref('TestPlayer')
 const isPlaying = ref(false)
+const isGodotLaunched = ref(false)
+const selectedComponents = ref<string[]>([])
+const showSettingsModal = ref(false)
+const godotExePath = ref(localStorage.getItem('godot_path') || '')
 
 const gameTypes = [
-  { id: 'top-down-rpg', name: '俯视角 RPG', icon: '🗡️' },
+  { id: 'top_down_rpg', name: '俯视角 RPG', icon: '🗡️' },
   { id: 'platformer', name: '横版跳跃', icon: '🏃' },
-  { id: 'top-down-shooter', name: '俯视角射击', icon: '🔫' },
+  { id: 'top_down_shooter', name: '俯视角射击', icon: '🔫' },
 ]
 
 const llmModels = [
@@ -85,10 +101,11 @@ const sendMessage = async () => {
   isLoading.value = true
 
   const loadingMsgId = Date.now() + 1
+  const providerName = imageProviders.find(p => p.id === selectedImageProvider.value)?.name || selectedImageProvider.value
   const loadingMsg: ChatMessage = {
     id: loadingMsgId,
     role: 'assistant',
-    content: '⏳ 正在向神经中枢发送指令，调动 Godot 装配车间...',
+    content: `⏳ 正在调度 [${providerName}] 渲染专属视觉资产，请稍候...`,
     timestamp: new Date()
   }
   chatMessages.value.push(loadingMsg)
@@ -102,7 +119,13 @@ const sendMessage = async () => {
       body: JSON.stringify({
         prompt: userInput,
         model_name: currentModel.value,
-        api_key: apiKey.value || undefined
+        api_key: apiKey.value || undefined,
+        image_provider: selectedImageProvider.value,
+        lora_model: customLora.value || undefined,
+        art_api_key: artApiKey.value || undefined,
+        art_base_url: artBaseUrl.value || undefined,
+        game_base: selectedGameType.value,
+        required_components: selectedComponents.value
       })
     })
 
@@ -118,10 +141,11 @@ const sendMessage = async () => {
           timestamp: new Date()
         }
       } else {
+        const errorMessage = result.error || result.message || '未知错误'
         chatMessages.value[loadingIndex] = {
           id: loadingMsgId,
           role: 'assistant',
-          content: `❌ 生成失败: ${result.error || result.message || '未知错误'}`,
+          content: `❌ 生成失败: ${errorMessage}`,
           timestamp: new Date()
         }
       }
@@ -141,6 +165,42 @@ const sendMessage = async () => {
   isLoading.value = false
 }
 
+const testImageProvider = async () => {
+  isTesting.value = true
+  testStatus.value = { status: 'idle', message: '' }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/test_image_provider`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider_name: selectedImageProvider.value,
+        api_key: artApiKey.value || undefined,
+        base_url: artBaseUrl.value || undefined
+      })
+    })
+
+    const result = await response.json()
+
+    if (response.ok) {
+      if (result.status === 'success') {
+        testStatus.value = { status: 'success', message: result.message }
+      } else {
+        testStatus.value = { status: 'error', message: result.message }
+      }
+    } else {
+      testStatus.value = { status: 'error', message: result.message || '请求失败' }
+    }
+  } catch (error) {
+    testStatus.value = { status: 'error', message: error instanceof Error ? error.message : '网络错误' }
+  } finally {
+    isLoading.value = false
+    isTesting.value = false
+  }
+}
+
 const togglePlay = () => {
   isPlaying.value = !isPlaying.value
 }
@@ -150,6 +210,69 @@ const handlePropertyChange = (propertyName: string, newValue: number) => {
   if (prop) {
     prop.value = newValue
   }
+}
+
+const launchGodot = async () => {
+  if (!godotExePath.value) {
+    alert('请先在系统设置中配置 Godot 引擎的可执行文件路径！')
+    showSettingsModal.value = true
+    return
+  }
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/launch_godot`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        godot_path: godotExePath.value
+      })
+    })
+    
+    const result = await response.json()
+    
+    if (response.ok && result.status === 'success') {
+      isGodotLaunched.value = true
+    } else {
+      alert(`启动 Godot 失败: ${result.message}`)
+    }
+  } catch (error) {
+    alert(`启动 Godot 失败: ${error instanceof Error ? error.message : '网络错误'}`)
+  }
+}
+
+const saveSettings = () => {
+  localStorage.setItem('godot_path', godotExePath.value)
+  showSettingsModal.value = false
+}
+
+const isSelectingFile = ref(false)
+
+const selectGodotFile = async () => {
+  isSelectingFile.value = true
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/system/select_file`)
+    const result = await response.json()
+    
+    if (result.path) {
+      godotExePath.value = result.path
+    }
+  } catch (error) {
+    console.error('选择文件失败:', error)
+  } finally {
+    isSelectingFile.value = false
+  }
+}
+
+const sendMessageWithCheck = async () => {
+  if (!isGodotLaunched.value) {
+    const shouldLaunch = window.confirm('⚠️ 检测到预览引擎未启动。您将无法实时看到生成的实体。是否立即自动为您启动 Godot？')
+    if (shouldLaunch) {
+      await launchGodot()
+    }
+  }
+  sendMessage()
 }
 </script>
 
@@ -162,11 +285,12 @@ const handlePropertyChange = (propertyName: string, newValue: number) => {
         v-model:apiKey="apiKey"
         v-model:inputMessage="inputMessage"
         v-model:selectedGameType="selectedGameType"
+        v-model:selectedComponents="selectedComponents"
         :chatMessages="chatMessages"
         :isLoading="isLoading"
         :gameTypes="gameTypes"
         :llmModels="llmModels"
-        @send="sendMessage"
+        @send="sendMessageWithCheck"
       />
     </aside>
 
@@ -174,7 +298,9 @@ const handlePropertyChange = (propertyName: string, newValue: number) => {
     <main class="flex-1 flex flex-col bg-slate-950">
       <GameStage
         :isPlaying="isPlaying"
+        :isGodotLaunched="isGodotLaunched"
         @toggle-play="togglePlay"
+        @launch-godot="launchGodot"
       />
     </main>
 
@@ -184,8 +310,86 @@ const handlePropertyChange = (propertyName: string, newValue: number) => {
         :assets="gameAssets"
         :entityProperties="entityProperties"
         :selectedEntity="selectedEntity"
+        :selectedImageProvider="selectedImageProvider"
+        :customLora="customLora"
+        :imageProviders="imageProviders"
+        :artApiKey="artApiKey"
+        :artBaseUrl="artBaseUrl"
+        :isTesting="isTesting"
+        :testStatus="testStatus"
         @update-property="handlePropertyChange"
+        @update:selectedImageProvider="selectedImageProvider = $event"
+        @update:customLora="customLora = $event"
+        @update:artApiKey="artApiKey = $event"
+        @update:artBaseUrl="artBaseUrl = $event"
+        @test-connection="testImageProvider"
       />
     </aside>
+  </div>
+  
+  <!-- 设置按钮 -->
+  <button
+    @click="showSettingsModal = true"
+    class="fixed bottom-4 right-4 w-12 h-12 bg-slate-800 hover:bg-slate-700 rounded-full flex items-center justify-center shadow-lg border border-slate-600 transition-colors duration-200"
+    title="系统设置"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+    </svg>
+  </button>
+  
+  <!-- 设置弹窗 -->
+  <div v-if="showSettingsModal" class="fixed inset-0 z-50 flex items-center justify-center">
+    <!-- 遮罩 -->
+    <div class="absolute inset-0 bg-black/60" @click="showSettingsModal = false"></div>
+    
+    <!-- 弹窗内容 -->
+    <div class="relative bg-slate-800 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md p-6">
+      <h2 class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+        </svg>
+        系统设置
+      </h2>
+      
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm text-slate-400 mb-2">Godot 引擎绝对路径 (.exe)</label>
+          <div class="flex gap-2">
+            <input
+              v-model="godotExePath"
+              type="text"
+              placeholder="例如: D:\Softwares\Godot\Godot_v4.exe"
+              class="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-sm text-gray-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+            />
+            <button
+              @click="selectGodotFile"
+              :disabled="isSelectingFile"
+              class="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg text-sm text-gray-200 transition-colors duration-200 flex items-center gap-2"
+            >
+              <span v-if="isSelectingFile" class="animate-spin">⏳</span>
+              <span v-else>📁</span>
+              浏览
+            </button>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">点击"浏览"按钮选择 Godot 可执行文件</p>
+        </div>
+      </div>
+      
+      <div class="flex justify-end gap-3 mt-6">
+        <button
+          @click="showSettingsModal = false"
+          class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-gray-200 transition-colors duration-200"
+        >
+          取消
+        </button>
+        <button
+          @click="saveSettings"
+          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors duration-200"
+        >
+          保存
+        </button>
+      </div>
+    </div>
   </div>
 </template>

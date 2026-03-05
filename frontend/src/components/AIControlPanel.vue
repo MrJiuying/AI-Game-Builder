@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ref, watch, computed } from 'vue'
+
 interface ChatMessage {
   id: number
   role: 'user' | 'assistant'
@@ -17,6 +19,12 @@ interface LLMModel {
   name: string
 }
 
+interface Component {
+  id: string
+  name: string
+  desc: string
+}
+
 const props = defineProps<{
   currentModel: string
   apiKey: string
@@ -26,6 +34,7 @@ const props = defineProps<{
   isLoading: boolean
   gameTypes: GameType[]
   llmModels: LLMModel[]
+  selectedComponents: string[]
 }>()
 
 const emit = defineEmits<{
@@ -33,8 +42,29 @@ const emit = defineEmits<{
   (e: 'update:apiKey', value: string): void
   (e: 'update:inputMessage', value: string): void
   (e: 'update:selectedGameType', value: string): void
+  (e: 'update:selectedComponents', value: string[]): void
   (e: 'send'): void
 }>()
+
+// 游戏底座组件配置表
+const genreComponents = {
+  'top_down_rpg': [
+    { id: 'TopDownMovementComponent', name: '八向平滑移动', desc: '包含加速度与摩擦力的物理移动' },
+    { id: 'CollisionGeneratorComponent', name: '动态物理碰撞箱', desc: '自动生成圆形/矩形碰撞体积' }
+  ],
+  'platformer': [
+    { id: 'PlatformerMovementComponent', name: '重力跳跃移动', desc: '横版专属重力与跳跃控制' }
+  ],
+  'top_down_shooter': [
+    { id: 'AimingComponent', name: '精确瞄准', desc: '通过鼠标或摇杆精确瞄准' },
+    { id: 'ProjectileEmitterComponent', name: '子弹发射', desc: '发射实体子弹或能量球' }
+  ]
+}
+
+// 当前底座的可用组件
+const currentComponents = computed(() => {
+  return genreComponents[props.selectedGameType as keyof typeof genreComponents] || []
+})
 
 const formatTime = (date: Date) => {
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
@@ -46,6 +76,27 @@ const handleKeydown = (e: KeyboardEvent) => {
     emit('send')
   }
 }
+
+const toggleComponent = (componentId: string) => {
+  const current = [...props.selectedComponents]
+  const index = current.indexOf(componentId)
+  
+  if (index > -1) {
+    current.splice(index, 1)
+  } else {
+    current.push(componentId)
+  }
+  
+  emit('update:selectedComponents', current)
+}
+
+// 监听游戏底座变化，清空选中的组件
+watch(
+  () => props.selectedGameType,
+  () => {
+    emit('update:selectedComponents', [])
+  }
+)
 </script>
 
 <template>
@@ -103,6 +154,32 @@ const handleKeydown = (e: KeyboardEvent) => {
           <div class="text-lg mb-1">{{ gameType.icon }}</div>
           <div>{{ gameType.name }}</div>
         </button>
+      </div>
+    </div>
+    
+    <!-- 可选能力蓝图 -->
+    <div class="p-4 border-b border-slate-700">
+      <h3 class="text-xs uppercase tracking-wider text-slate-400 mb-3 font-semibold">
+        可选能力蓝图 (Available Abilities)
+      </h3>
+      <div class="flex flex-wrap gap-2">
+        <button
+          v-for="component in currentComponents"
+          :key="component.id"
+          @click="toggleComponent(component.id)"
+          :title="component.desc"
+          :class="[
+            'px-3 py-1.5 rounded-full text-xs transition-all duration-200',
+            selectedComponents.includes(component.id)
+              ? 'bg-blue-600 text-white border border-blue-400 shadow-sm'
+              : 'bg-slate-800 text-slate-300 border border-slate-600 hover:bg-slate-700'
+          ]"
+        >
+          {{ component.name }}
+        </button>
+        <div v-if="currentComponents.length === 0" class="text-xs text-slate-500">
+          暂无可用能力
+        </div>
       </div>
     </div>
 

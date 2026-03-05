@@ -15,14 +15,31 @@ interface EntityProperty {
   max: number
 }
 
+interface ImageProvider {
+  id: string
+  name: string
+}
+
 const props = defineProps<{
   assets: GameAsset[]
   entityProperties: EntityProperty[]
   selectedEntity: string
+  selectedImageProvider: string
+  customLora: string
+  imageProviders: ImageProvider[]
+  artApiKey: string
+  artBaseUrl: string
+  isTesting: boolean
+  testStatus: { status: 'idle' | 'success' | 'error'; message: string }
 }>()
 
 const emit = defineEmits<{
   (e: 'update-property', propertyName: string, value: number): void
+  (e: 'update:selectedImageProvider', value: string): void
+  (e: 'update:customLora', value: string): void
+  (e: 'update:artApiKey', value: string): void
+  (e: 'update:artBaseUrl', value: string): void
+  (e: 'test-connection'): void
 }>()
 
 const activeTab = ref<'assets' | 'inspector'>('assets')
@@ -46,6 +63,30 @@ const handleNumberChange = (propertyName: string, event: Event) => {
   if (!isNaN(value)) {
     emit('update-property', propertyName, value)
   }
+}
+
+const handleImageProviderChange = (event: Event) => {
+  const value = (event.target as HTMLSelectElement).value
+  emit('update:selectedImageProvider', value)
+}
+
+const handleLoraChange = (event: Event) => {
+  const value = (event.target as HTMLInputElement).value
+  emit('update:customLora', value)
+}
+
+const handleArtApiKeyChange = (event: Event) => {
+  const value = (event.target as HTMLInputElement).value
+  emit('update:artApiKey', value)
+}
+
+const handleArtBaseUrlChange = (event: Event) => {
+  const value = (event.target as HTMLInputElement).value
+  emit('update:artBaseUrl', value)
+}
+
+const handleTestConnection = () => {
+  emit('test-connection')
 }
 </script>
 
@@ -79,10 +120,101 @@ const handleNumberChange = (propertyName: string, event: Event) => {
 
     <!-- 美术资产库 -->
     <div v-if="activeTab === 'assets'" class="flex-1 flex flex-col min-h-0">
+      <!-- 美术引擎配置 -->
+      <div class="p-4 border-b border-slate-700 bg-slate-800/30">
+        <h3 class="text-xs uppercase tracking-wider text-slate-400 mb-3 font-semibold">
+          美术引擎配置 (Art Engine)
+        </h3>
+        
+        <!-- 算力下拉框 -->
+        <div class="mb-3">
+          <label class="block text-xs text-slate-400 mb-1">算力选择</label>
+          <select
+            :value="selectedImageProvider"
+            @change="handleImageProviderChange"
+            class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+          >
+            <option v-for="provider in imageProviders" :key="provider.id" :value="provider.id">
+              {{ provider.name }}
+            </option>
+          </select>
+        </div>
+        
+        <!-- LoRA 挂载槽 -->
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">LoRA 挂载槽</label>
+          <input
+            type="text"
+            :value="customLora"
+            @input="handleLoraChange"
+            placeholder="输入专属 LoRA 名称或权重链接 (选填)"
+            class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+          />
+        </div>
+        
+        <!-- 配置折叠面板 -->
+        <div class="mt-4">
+          <h4 class="text-xs text-slate-400 mb-2">引擎配置</h4>
+          
+          <!-- 本地 SD -->
+          <div v-if="selectedImageProvider === 'local_sd'" class="bg-slate-800/50 border border-slate-700 rounded p-3">
+            <p class="text-xs text-slate-500">本地 SD WebUI 不需要 API Key，请确保服务已启动。</p>
+          </div>
+          
+          <!-- DALL-E 3 或 Cloud SD -->
+          <div v-else class="space-y-3">
+            <!-- 美术 API Key -->
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">美术 API Key</label>
+              <input
+                type="password"
+                :value="artApiKey"
+                @input="handleArtApiKeyChange"
+                placeholder="输入 API Key"
+                class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            
+            <!-- 接口地址 (仅 Cloud SD) -->
+            <div v-if="selectedImageProvider === 'cloud_sd'">
+              <label class="block text-xs text-slate-400 mb-1">接口地址 (Base URL)</label>
+              <input
+                type="text"
+                :value="artBaseUrl"
+                @input="handleArtBaseUrlChange"
+                placeholder="https://api.example.com"
+                class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+          </div>
+          
+          <!-- 测试连接按钮 -->
+          <div class="mt-4 flex items-center gap-2">
+            <button
+              @click="handleTestConnection"
+              :disabled="isTesting"
+              class="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-xs text-gray-300 transition-colors duration-200"
+            >
+              <span v-if="isTesting" class="animate-spin">⚡</span>
+              <span v-else>⚡</span>
+              测试连接
+            </button>
+            
+            <!-- 测试状态反馈 -->
+            <div v-if="testStatus.status === 'success'" class="text-xs text-green-400 flex items-center gap-1">
+              ✅ 连接成功
+            </div>
+            <div v-else-if="testStatus.status === 'error'" class="text-xs text-red-400 flex items-center gap-1">
+              ❌ 连接失败: {{ testStatus.message }}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- LORA 配置 -->
       <div class="p-4 border-b border-slate-700 bg-slate-800/30">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-slate-400">LORA 模型</span>
+          <span class="text-xs text-slate-400">预设 LoRA 模型</span>
           <button
             @click="showLoraConfig = !showLoraConfig"
             class="text-xs text-blue-400 hover:text-blue-300"

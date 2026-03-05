@@ -3,10 +3,12 @@ import { ref } from 'vue'
 
 const props = defineProps<{
   isPlaying: boolean
+  isGodotLaunched: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'toggle-play'): void
+  (e: 'launch-godot'): void
 }>()
 
 const isPaused = ref(false)
@@ -19,6 +21,10 @@ const handlePause = () => {
 const handleReset = () => {
   isPaused.value = false
   emit('toggle-play')
+}
+
+const handleLaunchGodot = () => {
+  emit('launch-godot')
 }
 </script>
 
@@ -69,6 +75,27 @@ const handleReset = () => {
 
     <!-- 底部播放控制区 -->
     <div class="px-4 py-3 bg-slate-900 border-t border-slate-700 flex items-center justify-center gap-4">
+      <!-- 启动 Godot 预览按钮 -->
+      <button
+        @click="handleLaunchGodot"
+        :class="[
+          'px-4 py-2 rounded-lg flex items-center gap-2 transition-all duration-200',
+          isGodotLaunched 
+            ? 'bg-green-600 hover:bg-green-700' 
+            : 'bg-blue-600 hover:bg-blue-700'
+        ]"
+        :title="isGodotLaunched ? 'Godot 引擎运行中' : '启动 Godot 预览引擎'"
+      >
+        <span v-if="isGodotLaunched" class="text-white">🟢</span>
+        <span v-else class="text-white">🚀</span>
+        <span class="text-sm text-white">
+          {{ isGodotLaunched ? '引擎运行中' : '启动 Godot 预览' }}
+        </span>
+      </button>
+
+      <!-- 分隔线 -->
+      <div class="w-px h-8 bg-slate-700"></div>
+
       <!-- 重置按钮 -->
       <button
         @click="handleReset"

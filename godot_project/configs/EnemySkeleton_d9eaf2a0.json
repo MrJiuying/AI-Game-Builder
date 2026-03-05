@@ -1,0 +1,26 @@
+{
+  "entity_name": "EnemySkeleton",
+  "base_type": "CharacterBody2D",
+  "components": [
+    "VelocityComponent",
+    "HealthComponent",
+    "HitboxComponent"
+  ],
+  "component_params": {
+    "VelocityComponent": {
+      "max_speed": 150.0,
+      "acceleration": 800.0,
+      "friction": 600.0
+    },
+    "HealthComponent": {
+      "max_health": 50.0
+    },
+    "HitboxComponent": {
+      "damage": 10.0
+    }
+  },
+  "sprite_path": "res://assets/sprites/EnemySkeleton_aa19aa82.png",
+  "metadata": {
+    "ai_generated": true
+  }
+}
