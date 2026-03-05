@@ -275,28 +275,41 @@ watch(
       
       <!-- 消息列表 -->
       <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-        <div
-          v-for="msg in chatMessages"
-          :key="msg.id"
-          :class="[
-            'flex',
-            msg.role === 'user' ? 'justify-end' : 'justify-start'
-          ]"
-        >
-          <div
-            :class="[
-              'max-w-[85%] rounded-lg px-4 py-2 text-sm',
-              msg.role === 'user'
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-800 text-gray-200'
-            ]"
-          >
-            <div class="whitespace-pre-wrap">{{ msg.content }}</div>
-            <div :class="['text-xs mt-1', msg.role === 'user' ? 'text-blue-200' : 'text-slate-500']">
-              {{ formatTime(msg.timestamp) }}
+        <template v-for="msg in chatMessages" :key="msg.id">
+          <!-- 用户消息 -->
+          <div v-if="msg.role === 'user'" class="flex justify-end">
+            <div class="max-w-[85%] rounded-lg px-4 py-2 text-sm bg-blue-600 text-white">
+              <div class="whitespace-pre-wrap">{{ msg.content }}</div>
+              <div class="text-xs mt-1 text-blue-200">{{ formatTime(msg.timestamp) }}</div>
             </div>
           </div>
-        </div>
+          
+          <!-- AI 回复 - 根据模式区分显示 -->
+          <div v-else class="flex justify-start">
+            <!-- Chat 模式：纯文本气泡 -->
+            <div v-if="currentMode === 'chat' || !msg.content?.includes('entity_name')" 
+                 class="max-w-[85%] rounded-lg px-4 py-2 text-sm bg-slate-800 text-gray-200">
+              <div class="whitespace-pre-wrap">{{ msg.content }}</div>
+              <div class="text-xs mt-1 text-slate-500">{{ formatTime(msg.timestamp) }}</div>
+            </div>
+            <!-- Build 模式：实体装配成功提示 -->
+            <div v-else-if="currentMode === 'build' && msg.content?.includes('entity_name')" 
+                 class="max-w-[85%] rounded-lg px-4 py-3 text-sm bg-emerald-900/50 border border-emerald-600 text-emerald-200">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-lg">✅</span>
+                <span class="font-medium">实体装配成功</span>
+              </div>
+              <div class="text-xs text-emerald-300/70">{{ msg.content }}</div>
+              <div class="text-xs mt-1 text-emerald-400/50">{{ formatTime(msg.timestamp) }}</div>
+            </div>
+            <!-- Art 模式 -->
+            <div v-else 
+                 class="max-w-[85%] rounded-lg px-4 py-2 text-sm bg-purple-900/50 border border-purple-600 text-purple-200">
+              <div class="whitespace-pre-wrap">{{ msg.content }}</div>
+              <div class="text-xs mt-1 text-purple-300/70">{{ formatTime(msg.timestamp) }}</div>
+            </div>
+          </div>
+        </template>
         
         <!-- 加载状态 -->
         <div v-if="isLoading" class="flex justify-start">
