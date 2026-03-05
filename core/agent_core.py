@@ -1,4 +1,5 @@
-from typing import Optional
+import re
+from typing import Optional, List, Dict
 import json
 import logging
 
@@ -17,27 +18,17 @@ GENRE_PROMPTS = {
     "top_down_shooter": "当前项目为【俯视角射击】。可用专属核心组件：AimingComponent, ProjectileEmitterComponent。"
 }
 
+# 系统提示词
+SYSTEM_PROMPTS = {
+    "chat": """你是一个资深游戏策划和编剧。你的任务是与用户探讨游戏设定、剧情、角色背景或数值平衡。
 
-class AgentCoordinator:
-    def __init__(self, llm_provider: BaseLLMProvider):
-        self._llm_provider = llm_provider
-        self._system_prompt = self._build_system_prompt()
+严禁输出任何 JSON、代码块或参数字典。请使用生动的自然语言进行对话。
 
-    def _build_system_prompt(self) -> str:
-        return """你是一个游戏实体生成助手。请根据用户的描述生成符合以下 JSON Schema 的配置：
+如果你看到历史记录里有 JSON，请完全忽略它们的格式，只关注其中的创意内容。""",
+    
+    "build": """你是一个严谨的游戏数据工程师。你只能输出符合 Godot 规范的纯 JSON 字典。
 
-{
-    "entity_name": "实体名称",
-    "base_type": "CharacterBody2D | Area2D | StaticBody2D | Node2D",
-    "components": [
-        {
-            "component_name": "组件名称",
-            "parameters": { ... }
-        }
-    ],
-    "sprite_path": "资源路径或null",
-    "metadata": { ... }
-}
+严禁输出任何解释性文字或自然语言。你必须严格遵守当前底座的物理规则，且只能从可用组件中选择来组装 JSON。
 
 通用组件：
 - VelocityComponent: max_speed, acceleration, friction
@@ -45,25 +36,82 @@ class AgentCoordinator:
 - HitboxComponent: damage
 - HurtboxComponent: (无参数)
 
-请直接输出 JSON，不要包含任何解释或 markdown 标记。"""
+请直接输出 JSON，不要包含任何解释或 markdown 标记。""",
+    
+    "art": """你是一个 AI 绘画提示词专家。请将用户描述转化为英文的 Stable Diffusion Prompt。
 
-    async def process_user_intent(self, user_text: str, game_base: Optional[str] = "top-down-rpg", required_components: Optional[list] = None) -> EntityConfig:
-        # 获取游戏底座规则
+只输出 Prompt 文本，不要有任何中文解释。不要输出 JSON 或任何代码块。"""
+}
+
+
+def filter_history_for_chat(history: List[Dict]) -> List[Dict]:
+    """过滤历史记录中的 JSON，替换为简洁描述"""
+    json_pattern = re.compile(r'\{[^{}]*"entity_name"[^{}]*\}', re.DOTALL)
+    
+    filtered = []
+    for msg in history:
+        content = msg.get("content", "")
+        if json_pattern.search(content):
+            content = "[之前生成的实体配置数据]"
+        filtered.append({"role": msg.get("role"), "content": content})
+    return filtered
+
+
+class AgentCoordinator:
+    def __init__(self, llm_provider: BaseLLMProvider):
+        self._llm_provider = llm_provider
+
+    def _build_build_system_prompt(self, game_base: str, required_components: list = None) -> str:
         genre_prompt = GENRE_PROMPTS.get(game_base, "")
+        system_prompt = SYSTEM_PROMPTS["build"]
         
-        # 构建完整的系统提示
-        full_system_prompt = f"{self._system_prompt}\n\n{genre_prompt}\n\n你必须严格遵守当前底座的物理规则，且只能从上述可用组件中选择来组装 JSON。"
+        full_prompt = f"{system_prompt}\n\n{genre_prompt}"
         
-        # 添加必需组件到提示
         if required_components and len(required_components) > 0:
             components_text = ", ".join(required_components)
-            user_text += f"\n\n用户已强制要求挂载以下组件：{components_text}。你在生成的 JSON components 列表中必须且只能包含这些组件，并在 component_params 中为它们分配合理的数值。"
+            full_prompt += f"\n\n用户已强制要求挂载以下组件：{components_text}。"
         
-        full_prompt = f"{full_system_prompt}\n\n用户需求：{user_text}"
+        return full_prompt
+
+    async def process_request(self, mode: str, user_text: str, game_base: str = "top-down-rpg", 
+                             required_components: list = None) -> Dict:
+        """统一的请求处理入口，根据 mode 分发"""
         
-        logger.info(f"正在调用 {self._llm_provider.get_provider_name()} 处理请求，游戏底座: {game_base}")
+        if mode == "chat":
+            return await self._process_chat(user_text)
+        elif mode == "build":
+            return await self._process_build(user_text, game_base, required_components)
+        elif mode == "art":
+            return await self._process_art(user_text)
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
+
+    async def _process_chat(self, user_text: str) -> Dict:
+        """💡 创意助理模式 - 纯文本对话"""
+        logger.info(f"【Chat模式】正在调用 {self._llm_provider.get_provider_name()} 处理闲聊请求")
         
-        history = memory_manager.get_messages_for_llm()
+        history = memory_manager.get_messages_for_llm("chat")
+        filtered_history = filter_history_for_chat(history)
+        
+        full_prompt = f"{SYSTEM_PROMPTS['chat']}\n\n用户：{user_text}"
+        
+        response = await self._llm_provider.generate_entity_schema(full_prompt, filtered_history)
+        
+        logger.info(f"【Chat模式】成功获取文本回复")
+        
+        return {
+            "type": "text",
+            "content": response
+        }
+
+    async def _process_build(self, user_text: str, game_base: str, required_components: list = None) -> Dict:
+        """🛠️ 实体工坊模式 - JSON 实体生成"""
+        logger.info(f"【Build模式】正在调用 {self._llm_provider.get_provider_name()} 处理实体生成请求")
+        
+        system_prompt = self._build_build_system_prompt(game_base, required_components)
+        full_prompt = f"{system_prompt}\n\n用户需求：{user_text}"
+        
+        history = memory_manager.get_messages_for_llm("build")
         
         json_string = await self._llm_provider.generate_entity_schema(full_prompt, history)
         
@@ -71,9 +119,27 @@ class AgentCoordinator:
         
         entity_config = self._validate_and_parse(raw_data)
         
-        logger.info(f"成功生成实体配置: {entity_config.entity_name}")
+        logger.info(f"【Build模式】成功生成实体配置: {entity_config.entity_name}")
         
-        return entity_config
+        return {
+            "type": "entity",
+            "entity_config": entity_config
+        }
+
+    async def _process_art(self, user_text: str) -> Dict:
+        """🎨 美术中心模式 - SD Prompt 生成"""
+        logger.info(f"【Art模式】正在调用 {self._llm_provider.get_provider_name()} 处理美术提示词")
+        
+        full_prompt = f"{SYSTEM_PROMPTS['art']}\n\n用户需求：{user_text}"
+        
+        response = await self._llm_provider.generate_entity_schema(full_prompt)
+        
+        logger.info(f"【Art模式】成功获取提示词: {response[:50]}...")
+        
+        return {
+            "type": "art_prompt",
+            "content": response
+        }
 
     def _extract_json(self, raw_string: str) -> dict:
         cleaned = raw_string.strip()
@@ -117,24 +183,11 @@ class AgentCoordinator:
         logger.info(f"已切换 LLM 提供者: {new_provider.get_provider_name()}")
 
     async def chat_mode(self, user_text: str) -> str:
-        CHAT_SYSTEM_PROMPT = """你是一个资深的游戏制作人与世界观架构师。请用专业的、富有启发性的语言与用户探讨游戏设定、剧情或数值平衡。不需要生成任何代码或JSON。"""
-        
-        full_prompt = f"{CHAT_SYSTEM_PROMPT}\n\n用户：{user_text}"
-        logger.info(f"【Chat模式】正在调用 {self._llm_provider.get_provider_name()} 处理闲聊请求")
-        
-        history = memory_manager.get_messages_for_llm()
-        response = await self._llm_provider.generate_entity_schema(full_prompt, history)
-        
-        logger.info(f"【Chat模式】成功获取文本回复")
-        return response
+        """Legacy method for compatibility"""
+        result = await self._process_chat(user_text)
+        return result["content"]
 
     async def art_mode(self, user_text: str) -> str:
-        ART_SYSTEM_PROMPT = """你是一个资深的 AI 美术提示词工程师。用户会输入他们想要的资产，请你提炼出最适合 Stable Diffusion 的英文正向提示词（Prompt）。只输出英文提示词，不要解释。"""
-        
-        full_prompt = f"{ART_SYSTEM_PROMPT}\n\n用户需求：{user_text}"
-        logger.info(f"【Art模式】正在调用 {self._llm_provider.get_provider_name()} 处理美术提示词")
-        
-        response = await self._llm_provider.generate_entity_schema(full_prompt)
-        
-        logger.info(f"【Art模式】成功获取提示词: {response[:50]}...")
-        return response
+        """Legacy method for compatibility"""
+        result = await self._process_art(user_text)
+        return result["content"]

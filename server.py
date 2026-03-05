@@ -174,9 +174,17 @@ async def generate_entity(request: GenerateEntityRequest):
         # 保存用户消息到记忆
         memory_manager.add_message("user", request.prompt, mode)
         
+        # 使用统一的请求处理入口
+        result = await coordinator.process_request(
+            mode=mode,
+            user_text=request.prompt,
+            game_base=request.game_base,
+            required_components=request.required_components
+        )
+        
         # ==================== CHAT 模式 ====================
         if mode == "chat":
-            text_reply = await coordinator.chat_mode(request.prompt)
+            text_reply = result["content"]
             memory_manager.add_message("assistant", text_reply, mode)
             
             return GenerateEntityResponse(
@@ -188,7 +196,7 @@ async def generate_entity(request: GenerateEntityRequest):
         
         # ==================== ART 模式 ====================
         elif mode == "art":
-            art_prompt = await coordinator.art_mode(request.prompt)
+            art_prompt = result["content"]
             
             try:
                 art_api_key = request.art_api_key or request.api_key
@@ -222,7 +230,7 @@ async def generate_entity(request: GenerateEntityRequest):
         
         # ==================== BUILD 模式 (默认) ====================
         else:
-            entity_config = await coordinator.process_user_intent(
+            entity_config = result["entity_config"]
                 request.prompt, 
                 game_base=request.game_base,
                 required_components=request.required_components
