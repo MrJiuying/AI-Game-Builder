@@ -1,0 +1,22 @@
+[
+  {
+    "role": "user",
+    "content": "制作一个狐狸",
+    "mode": "build"
+  },
+  {
+    "role": "assistant",
+    "content": "生成了实体 EnemySkeleton，包含组件: ['VelocityComponent', 'HealthComponent', 'HitboxComponent']",
+    "mode": "build"
+  },
+  {
+    "role": "user",
+    "content": "制作一个狐狸",
+    "mode": "build"
+  },
+  {
+    "role": "assistant",
+    "content": "生成了实体 EnemySkeleton，包含组件: ['VelocityComponent', 'HealthComponent', 'HitboxComponent']",
+    "mode": "build"
+  }
+]

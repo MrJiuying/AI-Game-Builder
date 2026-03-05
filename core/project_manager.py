@@ -367,8 +367,11 @@ func _create_fallback_sprite() -> Sprite2D:
 	return sprite
 '''
         livelink_path = scripts_dir / "LiveLink.gd"
-        livelink_path.write_text(livelink_content, encoding="utf-8")
-        logger.info(f"LiveLink 脚本已创建: {livelink_path}")
+        if livelink_path.exists():
+            logger.info(f"LiveLink 脚本已存在，跳过覆盖: {livelink_path}")
+        else:
+            livelink_path.write_text(livelink_content, encoding="utf-8")
+            logger.info(f"LiveLink 脚本已创建: {livelink_path}")
         
         return {
             "scene_path": str(tscn_path),

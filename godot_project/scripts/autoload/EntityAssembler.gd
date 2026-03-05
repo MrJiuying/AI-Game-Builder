@@ -211,7 +211,7 @@ func _load_sprite(entity: Node2D, json_data: Dictionary) -> void:
 	
 	# 如果没有有效的 sprite_path，加载默认图标
 	if sprite_path == "" or sprite_path == null:
-		sprite.texture = load("res://icon.svg")
+		sprite.texture = _make_fallback_texture()
 	else:
 		# 尝试使用 load() 加载 Godot 资源
 		var texture: Texture2D = load(sprite_path)
@@ -221,10 +221,16 @@ func _load_sprite(entity: Node2D, json_data: Dictionary) -> void:
 				sprite.position = texture.get_size() / 2.0
 		else:
 			push_warning("[EntityAssembler] 纹理加载失败: %s，使用默认图标" % sprite_path)
-			sprite.texture = load("res://icon.svg")
+			sprite.texture = _make_fallback_texture()
 	
 	entity.add_child(sprite)
 	_logger.info("已设置精灵纹理: %s -> %s" % [sprite.texture, entity.name])
+
+
+func _make_fallback_texture() -> Texture2D:
+	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.2, 0.55, 0.95, 1.0))
+	return ImageTexture.create_from_image(img)
 
 
 func build_entity_from_dict(json_data: Dictionary) -> Node2D:

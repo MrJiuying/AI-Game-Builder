@@ -73,15 +73,7 @@ async def handle_chat_mode(llm_provider: AgentCoordinator, user_text: str) -> Di
     
     full_prompt = f"{SYSTEM_PROMPTS['chat']}\n\n用户：{user_text}"
     
-    response = await llm_provider._llm_provider.generate_entity_schema(full_prompt, filtered_history)
-    
-    # 拦截 JSON 输出：只有当响应是有效 JSON 且包含 entity_name 时才拦截
-    try:
-        parsed = json.loads(response)
-        if isinstance(parsed, dict) and "entity_name" in parsed:
-            response = "【系统提示】AI 试图在该模式下输出代码，已拦截。请切换到实体工坊进行操作。"
-    except (json.JSONDecodeError, ValueError):
-        pass
+    response = await llm_provider._llm_provider.generate_text(full_prompt, filtered_history)
     
     logger.info(f"【Chat模式】成功获取文本回复")
     
@@ -178,7 +170,7 @@ async def handle_art_mode(llm_provider: AgentCoordinator, user_text: str) -> Dic
     
     full_prompt = f"{SYSTEM_PROMPTS['art']}\n\n用户需求：{user_text}"
     
-    response = await llm_provider._llm_provider.generate_entity_schema(full_prompt)
+    response = await llm_provider._llm_provider.generate_text(full_prompt, [])
     
     logger.info(f"【Art模式】成功获取提示词: {response[:50]}...")
     

@@ -10,6 +10,10 @@ class BaseLLMProvider(ABC):
         pass
 
     @abstractmethod
+    async def generate_text(self, prompt: str, history: list = None) -> str:
+        pass
+
+    @abstractmethod
     def get_provider_name(self) -> str:
         pass
 
@@ -21,6 +25,10 @@ class DeepSeekProvider(BaseLLMProvider):
 
     def get_provider_name(self) -> str:
         return "deepseek"
+
+    async def generate_text(self, prompt: str, history: list = None) -> str:
+        await asyncio.sleep(0.1)
+        return "好的，我很乐意和你聊聊游戏设定！请问你想探讨什么内容？"
 
     async def generate_entity_schema(self, prompt: str, history: list = None) -> str:
         await asyncio.sleep(0.1)
@@ -65,6 +73,10 @@ class LocalOllamaProvider(BaseLLMProvider):
     def get_provider_name(self) -> str:
         return "ollama"
 
+    async def generate_text(self, prompt: str, history: list = None) -> str:
+        await asyncio.sleep(0.1)
+        return "好的，我很乐意和你聊聊游戏设定！请问你想探讨什么内容？"
+
     async def generate_entity_schema(self, prompt: str, history: list = None) -> str:
         await asyncio.sleep(0.1)
         
@@ -105,6 +117,10 @@ class OpenAIProvider(BaseLLMProvider):
 
     def get_provider_name(self) -> str:
         return "openai"
+
+    async def generate_text(self, prompt: str, history: list = None) -> str:
+        await asyncio.sleep(0.1)
+        return "好的，我很乐意和你聊聊游戏设定！请问你想探讨什么内容？"
 
     async def generate_entity_schema(self, prompt: str, history: list = None) -> str:
         await asyncio.sleep(0.1)

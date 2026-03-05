@@ -5,6 +5,11 @@ var websocket_url = "ws://127.0.0.1:8000/ws"
 var was_connected = false
 var current_entity: Node2D = null
 
+const _COMPONENT_DIR_CANDIDATES: Array[String] = [
+	"res://components/",
+	"res://scripts/components/",
+]
+
 func _ready():
 	print("【LiveLink】🚀 准备连接到中枢大脑: ", websocket_url)
 	var err = socket.connect_to_url(websocket_url)
@@ -100,19 +105,22 @@ func spawn_entity(data: Dictionary):
 	if sprite_path != "":
 		var real_img_path = ProjectSettings.globalize_path(sprite_path)
 		print("【LiveLink】尝试加载图片: ", real_img_path)
-		var img = Image.new()
-		if img.load(real_img_path) == OK:
-			sprite.texture = ImageTexture.create_from_image(img)
-			texture_loaded = true
-			sprite.scale = Vector2(0.25, 0.25)
-			print("【LiveLink】✅ 成功加载 AI 专属立绘！")
+		if not FileAccess.file_exists(real_img_path):
+			print("【LiveLink】❌ 立绘文件不存在，路径: ", real_img_path)
 		else:
-			print("【LiveLink】❌ 立绘加载失败，路径: ", real_img_path)
+			var img = Image.new()
+			if img.load(real_img_path) == OK:
+				sprite.texture = ImageTexture.create_from_image(img)
+				texture_loaded = true
+				sprite.scale = Vector2(0.25, 0.25)
+				print("【LiveLink】✅ 成功加载 AI 专属立绘！")
+			else:
+				print("【LiveLink】❌ 立绘加载失败，路径: ", real_img_path)
 	
 	# 兜底贴图
 	if not texture_loaded:
-		print("【LiveLink】⚠️ 启用兜底蓝色机器人图标！")
-		sprite.texture = load("res://icon.svg")
+		print("【LiveLink】⚠️ 启用兜底贴图！")
+		sprite.texture = _make_fallback_texture()
 	
 	# 设置精灵位置
 	if sprite.texture != null:
@@ -127,25 +135,26 @@ func spawn_entity(data: Dictionary):
 	
 	for comp_name in components:
 		print("【LiveLink】🔧 尝试挂载组件: ", comp_name)
-		var script_path = "res://components/" + comp_name + ".gd"
-		if ResourceLoader.exists(script_path):
-			var loaded_script = load(script_path)
-			if loaded_script:
-				var comp_node = loaded_script.new()
-				comp_node.name = comp_name
-				
-				# 应用组件参数
-				var params = component_params.get(comp_name, {})
-				for param_key in params.keys():
-					comp_node.set(param_key, params[param_key])
-					print("【LiveLink】  设置参数 ", param_key, " = ", params[param_key])
-				
-				current_entity.add_child(comp_node)
-				print("【LiveLink】✅ 组件 ", comp_name, " 挂载成功！")
-			else:
-				print("【LiveLink】❌ 组件脚本加载失败: ", script_path)
-		else:
-			print("【LiveLink】⚠️ 组件脚本不存在: ", script_path)
+		var loaded_script := _load_component_script(comp_name)
+		if loaded_script == null:
+			print("【LiveLink】⚠️ 组件脚本不存在或无法编译: ", comp_name)
+			continue
+		
+		var comp_node = loaded_script.new()
+		if comp_node == null:
+			print("【LiveLink】❌ 组件脚本实例化失败: ", comp_name)
+			continue
+		
+		comp_node.name = comp_name
+		
+		# 应用组件参数
+		var params = component_params.get(comp_name, {})
+		for param_key in params.keys():
+			comp_node.set(param_key, params[param_key])
+			print("【LiveLink】  设置参数 ", param_key, " = ", params[param_key])
+		
+		current_entity.add_child(comp_node)
+		print("【LiveLink】✅ 组件 ", comp_name, " 挂载成功！")
 	
 	# 4. 挂载到舞台并强制居中！
 	current_entity.global_position = get_viewport_rect().size / 2.0
@@ -154,5 +163,65 @@ func spawn_entity(data: Dictionary):
 func _create_fallback_sprite() -> Sprite2D:
 	var sprite = Sprite2D.new()
 	sprite.name = "FallbackSprite"
-	sprite.texture = load("res://icon.svg")
+	sprite.texture = _make_fallback_texture()
 	return sprite
+
+
+func _make_fallback_texture() -> Texture2D:
+	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.2, 0.55, 0.95, 1.0))
+	return ImageTexture.create_from_image(img)
+
+
+func _candidate_component_paths(comp_name: String) -> Array[String]:
+	var paths: Array[String] = []
+	for dir_path in _COMPONENT_DIR_CANDIDATES:
+		paths.append(dir_path + comp_name + ".gd")
+	return paths
+
+
+func _try_load_script_res(script_path: String) -> Script:
+	if ResourceLoader.exists(script_path):
+		# Ignore cache so edits/new files can be picked up more reliably.
+		var s: Resource = ResourceLoader.load(script_path, "", ResourceLoader.CACHE_MODE_IGNORE)
+		if s is Script:
+			return s as Script
+	return null
+
+
+func _try_compile_gd_from_disk(res_path: String) -> GDScript:
+	var abs_path := ProjectSettings.globalize_path(res_path)
+	if not FileAccess.file_exists(abs_path):
+		return null
+	
+	var f := FileAccess.open(abs_path, FileAccess.READ)
+	if f == null:
+		return null
+	
+	var code := f.get_as_text()
+	f.close()
+	
+	if code.strip_edges() == "":
+		return null
+	
+	var gd := GDScript.new()
+	gd.source_code = code
+	var err := gd.reload()
+	if err != OK:
+		print("【LiveLink】❌ 运行时编译组件脚本失败: ", res_path, " err=", err)
+		return null
+	return gd
+
+
+func _load_component_script(comp_name: String) -> Script:
+	for script_path in _candidate_component_paths(comp_name):
+		var s := _try_load_script_res(script_path)
+		if s != null:
+			return s
+		
+		# For scripts created while preview is running, the resource FS may not notice immediately.
+		var compiled := _try_compile_gd_from_disk(script_path)
+		if compiled != null:
+			return compiled
+	
+	return null

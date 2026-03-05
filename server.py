@@ -238,23 +238,8 @@ async def generate_entity(request: GenerateEntityRequest):
             ai_response = f"生成了实体 {entity_config.entity_name}，包含组件: {[c.component_name for c in entity_config.components]}"
             memory_manager.add_message("assistant", ai_response, mode)
             
-            art_prompt_for_sd = f"生成一个 {entity_config.entity_name} 的 2D 游戏角色，清晰、风格化，适合俯视角游戏"
-            
-            try:
-                art_api_key = request.art_api_key or request.api_key
-                image_bytes = await image_coordinator.generate_image(
-                    provider_name=request.image_provider,
-                    prompt=art_prompt_for_sd,
-                    lora_model=request.lora_model,
-                    api_key=art_api_key,
-                    base_url=request.art_base_url
-                )
-                
-                sprite_path = await project_manager.save_generated_asset(image_bytes, entity_config.entity_name)
-                entity_config.sprite_path = sprite_path
-            except ProviderOfflineError as e:
-                logger.warning(f"图片提供者离线: {e}")
-                entity_config.sprite_path = "res://icon.svg"
+            # Leave empty by default; Godot side will use a safe fallback texture.
+            entity_config.sprite_path = ""
             
             config_dir = GODOT_PROJECT_PATH / "configs"
             config_dir.mkdir(parents=True, exist_ok=True)

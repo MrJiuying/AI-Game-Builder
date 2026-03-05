@@ -13,5 +13,35 @@
     "role": "user",
     "content": "你好",
     "mode": "chat"
+  },
+  {
+    "role": "user",
+    "content": "你好",
+    "mode": "chat"
+  },
+  {
+    "role": "assistant",
+    "content": "【系统提示】AI 试图在该模式下输出代码，已拦截。请切换到实体工坊进行操作。",
+    "mode": "chat"
+  },
+  {
+    "role": "user",
+    "content": "你好",
+    "mode": "chat"
+  },
+  {
+    "role": "assistant",
+    "content": "【系统提示】AI 试图在该模式下输出代码，已拦截。请切换到实体工坊进行操作。",
+    "mode": "chat"
+  },
+  {
+    "role": "user",
+    "content": "你好",
+    "mode": "chat"
+  },
+  {
+    "role": "assistant",
+    "content": "好的，我很乐意和你聊聊游戏设定！请问你想探讨什么内容？",
+    "mode": "chat"
   }
 ]

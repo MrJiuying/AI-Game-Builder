@@ -1,0 +1,12 @@
+[
+  {
+    "role": "user",
+    "content": "狐狸",
+    "mode": "art"
+  },
+  {
+    "role": "assistant",
+    "content": "生成了美术资产，提示词: 好的，我很乐意和你聊聊游戏设定！请问你想探讨什么内容？",
+    "mode": "art"
+  }
+]
