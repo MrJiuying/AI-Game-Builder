@@ -48,9 +48,11 @@ func handle_message(msg: String):
 		print("【LiveLink】❌ 解析结果不是字典！")
 		return
 	
-	var action = data.get("action", "")
+	var action: String = data.get("action", "") as String
 	if action == "spawn_entity":
 		spawn_entity(data)
+	elif action == "update_component":
+		update_entity_component(data)
 	else:
 		print("【LiveLink】⚠️ 未知 action: ", action)
 
@@ -93,7 +95,7 @@ func spawn_entity(data: Dictionary):
 		current_entity.queue_free()
 	
 	current_entity = CharacterBody2D.new()
-	current_entity.name = "PreviewEntity"
+	current_entity.name = str(entity_data.get("entity_name", "PreviewEntity"))
 	add_child(current_entity)
 	
 	# 2. 强力动态加载贴图
@@ -159,6 +161,39 @@ func spawn_entity(data: Dictionary):
 	# 4. 挂载到舞台并强制居中！
 	current_entity.global_position = get_viewport_rect().size / 2.0
 	print("【LiveLink】🎉 实体降临！坐标: ", current_entity.global_position)
+
+
+func update_entity_component(data: Dictionary) -> void:
+	# 给实体名、组件名、参数字典都加上明确类型
+	var entity_name: String = data.get("entity_name", "") as String
+	var component_name: String = data.get("component_name", "") as String
+	var parameters: Dictionary = data.get("parameters", {}) as Dictionary
+	
+	if entity_name == "" or component_name == "":
+		print("【LiveLink】❌ update_component 缺少 entity_name/component_name: ", data)
+		return
+	if not (parameters is Dictionary):
+		print("【LiveLink】❌ update_component.parameters 必须是字典: ", data)
+		return
+	
+	var entity: Node = get_tree().get_root().find_child(entity_name, true, false)
+	if entity == null and current_entity != null and is_instance_valid(current_entity) and current_entity.name == entity_name:
+		entity = current_entity
+	
+	if entity == null:
+		print("【LiveLink】❌ 找不到实体节点: ", entity_name)
+		return
+	
+	var comp: Node = entity.find_child(component_name, true, false)
+	if comp == null:
+		print("【LiveLink】❌ 找不到组件节点: ", component_name, " under ", entity_name)
+		return
+	
+	for k in parameters.keys():
+		comp.set(k, parameters[k])
+		print("【LiveLink】  热更参数 ", k, " = ", parameters[k])
+	
+	print("【LiveLink】⚡ 属性热更成功！ entity=", entity_name, " component=", component_name)
 
 func _create_fallback_sprite() -> Sprite2D:
 	var sprite = Sprite2D.new()

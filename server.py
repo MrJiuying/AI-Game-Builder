@@ -233,6 +233,20 @@ async def generate_entity(request: GenerateEntityRequest):
                 request.game_base, 
                 request.required_components
             )
+            if result.get("type") == "action" and result.get("action") == "update_component":
+                action_data = result.get("data", {})
+                if not isinstance(action_data, dict):
+                    raise ValueError("update_component data must be a dict")
+
+                await manager.broadcast(action_data)
+
+                return GenerateEntityResponse(
+                    status="success",
+                    entity_name=action_data.get("entity_name"),
+                    message="⚡ 已下发组件增量更新指令",
+                    mode="build",
+                )
+
             entity_config = result["entity_config"]
             
             ai_response = f"生成了实体 {entity_config.entity_name}，包含组件: {[c.component_name for c in entity_config.components]}"

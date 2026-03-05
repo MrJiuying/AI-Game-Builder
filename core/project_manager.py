@@ -255,6 +255,8 @@ func handle_message(msg: String):
 	var action = data.get("action", "")
 	if action == "spawn_entity":
 		spawn_entity(data)
+	elif action == "update_component":
+		update_entity_component(data)
 	else:
 		print("【LiveLink】⚠️ 未知 action: ", action)
 
@@ -297,7 +299,7 @@ func spawn_entity(data: Dictionary):
 		current_entity.queue_free()
 	
 	current_entity = CharacterBody2D.new()
-	current_entity.name = "PreviewEntity"
+	current_entity.name = str(entity_data.get("entity_name", "PreviewEntity"))
 	add_child(current_entity)
 	
 	# 2. 强力动态加载贴图
@@ -320,8 +322,8 @@ func spawn_entity(data: Dictionary):
 	
 	# 兜底贴图
 	if not texture_loaded:
-		print("【LiveLink】⚠️ 启用兜底蓝色机器人图标！")
-		sprite.texture = load("res://icon.svg")
+		print("【LiveLink】⚠️ 启用兜底贴图！")
+		sprite.texture = _make_fallback_texture()
 	
 	# 设置精灵位置
 	if sprite.texture != null:
@@ -360,11 +362,44 @@ func spawn_entity(data: Dictionary):
 	current_entity.global_position = get_viewport_rect().size / 2.0
 	print("【LiveLink】🎉 实体降临！坐标: ", current_entity.global_position)
 
+func update_entity_component(data: Dictionary) -> void:
+	var entity_name := str(data.get("entity_name", ""))
+	var component_name := str(data.get("component_name", ""))
+	var parameters := data.get("parameters", {})
+	
+	if entity_name == "" or component_name == "":
+		print("【LiveLink】❌ update_component 缺少 entity_name/component_name: ", data)
+		return
+	if not (parameters is Dictionary):
+		print("【LiveLink】❌ update_component.parameters 必须是字典: ", data)
+		return
+	
+	var entity: Node = get_tree().get_root().find_child(entity_name, true, false)
+	if entity == null:
+		print("【LiveLink】❌ 找不到实体节点: ", entity_name)
+		return
+	
+	var comp: Node = entity.find_child(component_name, true, false)
+	if comp == null:
+		print("【LiveLink】❌ 找不到组件节点: ", component_name, " under ", entity_name)
+		return
+	
+	for k in parameters.keys():
+		comp.set(k, parameters[k])
+		print("【LiveLink】  热更参数 ", k, " = ", parameters[k])
+	
+	print("【LiveLink】⚡ 属性热更成功！ entity=", entity_name, " component=", component_name)
+
 func _create_fallback_sprite() -> Sprite2D:
 	var sprite = Sprite2D.new()
 	sprite.name = "FallbackSprite"
-	sprite.texture = load("res://icon.svg")
+	sprite.texture = _make_fallback_texture()
 	return sprite
+
+func _make_fallback_texture() -> Texture2D:
+	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.2, 0.55, 0.95, 1.0))
+	return ImageTexture.create_from_image(img)
 '''
         livelink_path = scripts_dir / "LiveLink.gd"
         if livelink_path.exists():

@@ -40,11 +40,31 @@ SYSTEM_PROMPTS = {
 - HitboxComponent: damage
 - HurtboxComponent: (无参数)
 
+新能力（增量修改 / Function Calling）：
+如果你判断用户的需求是【修改场上现有实体的属性】而不是生成新实体，请输出以下动作格式（只输出 JSON）：
+{"action": "update_component", "entity_name": "实体名", "component_name": "组件名", "parameters": {"参数名": 新数值}}
+
 请直接输出 JSON，不要包含任何解释或 markdown 标记。""",
     
-    "art": """你是一个 AI 绘画提示词专家。请将用户描述转化为英文的 Stable Diffusion Prompt。
+    "art": """你是一个英文 Stable Diffusion 提示词生成器。你的任务是把用户的中文描述转换成高质量的英文图像生成提示词。
 
-只输出 Prompt 文本，不要有任何中文解释。不要输出 JSON 或任何代码块。"""
+规则：
+1. 只输出英文提示词
+2. 不要输出任何中文、中文标点、JSON 或代码块
+3. 不要添加任何解释、闲聊或自我介绍
+
+示例：
+用户：生成一个红色的战士角色
+输出：red warrior character, 2D game sprite, top-down view, pixel art style, detailed, game asset
+
+用户：可爱的蓝色史莱姆
+输出：cute blue slime creature, 2D game sprite, cartoon style, cute, round shape, game asset
+
+用户：黑暗骑士装备
+输出：dark knight armor, 2D game sprite, metallic armor, dark fantasy, detailed, game asset
+
+现在请根据用户的描述生成英文提示词：
+"""
 }
 
 
@@ -71,9 +91,11 @@ async def handle_chat_mode(llm_provider: AgentCoordinator, user_text: str) -> Di
     history = memory_manager.get_messages_for_llm("chat")
     filtered_history = filter_history_for_chat(history)
     
-    full_prompt = f"{SYSTEM_PROMPTS['chat']}\n\n用户：{user_text}"
-    
-    response = await llm_provider._llm_provider.generate_text(full_prompt, filtered_history)
+    response = await llm_provider._llm_provider.generate_text(
+        system_prompt=SYSTEM_PROMPTS['chat'],
+        user_text=user_text,
+        history=filtered_history
+    )
     
     logger.info(f"【Chat模式】成功获取文本回复")
     
@@ -151,11 +173,24 @@ async def handle_build_mode(llm_provider: AgentCoordinator, user_text: str,
     json_string = await llm_provider._llm_provider.generate_entity_schema(full_prompt, history)
     
     raw_data = _extract_json(json_string)
-    
+
+    # 增量修改动作：原样透传给上层（server -> websocket -> Godot）
+    if isinstance(raw_data, dict) and raw_data.get("action") == "update_component":
+        logger.info(
+            "【Build模式】识别到增量修改动作: entity=%s component=%s",
+            raw_data.get("entity_name"),
+            raw_data.get("component_name"),
+        )
+        return {
+            "type": "action",
+            "action": "update_component",
+            "data": raw_data,
+        }
+
     entity_config = _validate_and_parse(raw_data)
-    
+
     logger.info(f"【Build模式】成功生成实体配置: {entity_config.entity_name}")
-    
+
     return {
         "type": "entity",
         "entity_config": entity_config
@@ -168,9 +203,11 @@ async def handle_art_mode(llm_provider: AgentCoordinator, user_text: str) -> Dic
     provider_name = llm_provider._llm_provider.get_provider_name()
     logger.info(f"【Art模式】正在调用 {provider_name} 处理美术提示词")
     
-    full_prompt = f"{SYSTEM_PROMPTS['art']}\n\n用户需求：{user_text}"
-    
-    response = await llm_provider._llm_provider.generate_text(full_prompt, [])
+    response = await llm_provider._llm_provider.generate_text(
+        system_prompt=SYSTEM_PROMPTS['art'],
+        user_text=f"用户需求：{user_text}",
+        history=[]
+    )
     
     logger.info(f"【Art模式】成功获取提示词: {response[:50]}...")
     
