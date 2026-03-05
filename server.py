@@ -10,6 +10,7 @@ import subprocess
 import os
 from pathlib import Path
 from asyncio import Queue
+from dotenv import load_dotenv
 
 from core.agent_core import AgentCoordinator
 from core.llm_providers import DeepSeekProvider, LocalOllamaProvider, OpenAIProvider
@@ -17,6 +18,9 @@ from core.project_manager import ProjectResourceManager
 from core.image_providers import ProviderOfflineError
 from core.image_router import ImageGeneratorCoordinator
 from core.memory_manager import memory_manager
+
+ENV_PATH = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=ENV_PATH, override=True)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -100,6 +104,10 @@ class LaunchGodotRequest(BaseModel):
     godot_path: Optional[str] = None
 
 
+class ConfigRequest(BaseModel):
+    deepseek_api_key: str
+
+
 class GenerateEntityResponse(BaseModel):
     status: str
     entity_name: Optional[str] = None
@@ -111,17 +119,39 @@ class GenerateEntityResponse(BaseModel):
     mode: Optional[str] = "build"
 
 
-def get_llm_provider(model_name: str, api_key: Optional[str] = None) -> AgentCoordinator:
+def get_llm_provider(model_name: str) -> AgentCoordinator:
     if model_name == "deepseek":
-        provider = DeepSeekProvider(api_key=api_key or "sk-mock-key")
+        provider = DeepSeekProvider()
     elif model_name == "ollama":
         provider = LocalOllamaProvider(model="llama3")
     elif model_name in ["gpt4", "openai"]:
-        provider = OpenAIProvider(api_key=api_key or "sk-mock-key")
+        provider = OpenAIProvider(api_key=os.getenv("OPENAI_API_KEY", ""))
     else:
-        provider = DeepSeekProvider(api_key=api_key or "sk-mock-key")
+        provider = DeepSeekProvider()
     
     return AgentCoordinator(provider)
+
+
+def _upsert_env_key(file_path: Path, key: str, value: str) -> None:
+    lines: List[str] = []
+    if file_path.exists():
+        lines = file_path.read_text(encoding="utf-8").splitlines()
+
+    updated_lines: List[str] = []
+    replaced = False
+    prefix = f"{key}="
+
+    for line in lines:
+        if line.startswith(prefix):
+            updated_lines.append(f"{key}={value}")
+            replaced = True
+        else:
+            updated_lines.append(line)
+
+    if not replaced:
+        updated_lines.append(f"{key}={value}")
+
+    file_path.write_text("\n".join(updated_lines) + "\n", encoding="utf-8")
 
 
 @app.get("/")
@@ -184,7 +214,7 @@ async def generate_entity(request: GenerateEntityRequest):
     logger.info(f"收到生成请求: mode={mode}, model={request.model_name}, prompt={request.prompt[:50]}...")
     
     try:
-        coordinator = get_llm_provider(request.model_name, request.api_key)
+        coordinator = get_llm_provider(request.model_name)
         
         # 保存用户消息到记忆
         memory_manager.add_message("user", request.prompt, mode)
@@ -319,6 +349,19 @@ async def generate_entity(request: GenerateEntityRequest):
             error=str(e),
             message="生成过程中出现错误"
         )
+
+
+@app.post("/api/config")
+async def save_config(request: ConfigRequest):
+    deepseek_api_key = request.deepseek_api_key.strip()
+    if not deepseek_api_key:
+        raise HTTPException(status_code=400, detail="deepseek_api_key 不能为空")
+
+    _upsert_env_key(ENV_PATH, "DEEPSEEK_API_KEY", deepseek_api_key)
+    os.environ["DEEPSEEK_API_KEY"] = deepseek_api_key
+    load_dotenv(dotenv_path=ENV_PATH, override=True)
+
+    return {"status": "success", "message": "DeepSeek API Key 保存成功"}
 
 
 @app.get("/api/chat/history")

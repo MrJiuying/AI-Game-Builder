@@ -52,6 +52,7 @@ const emit = defineEmits<{
   (e: 'update:newModelForm', value: { id: string; name: string; api_key: string; base_url: string }): void
   (e: 'addModel'): void
   (e: 'send'): void
+  (e: 'save-api-key', value: string): void
 }>()
 
 const modes = [
@@ -61,6 +62,7 @@ const modes = [
 ]
 
 const messagesContainer = ref<HTMLElement | null>(null)
+const configSaveStatus = ref('')
 
 watch(() => props.chatMessages.length, () => {
   setTimeout(() => {
@@ -131,8 +133,23 @@ const updateModelApiKey = (value: string) => {
   const idx = models.findIndex(m => m.id === props.currentModel)
   if (idx !== -1) {
     models[idx].api_key = value
+    emit('update:apiKey', value)
     emit('update:newModelForm', { ...props.newModelForm, api_key: value })
     localStorage.setItem('llm_models', JSON.stringify(models))
+  }
+}
+
+const saveCurrentApiKey = () => {
+  const value = (props.llmModels?.find?.(m => m.id === props.currentModel)?.api_key || '').trim()
+  configSaveStatus.value = value ? '正在保存...' : ''
+  emit('save-api-key', value)
+  if (value) {
+    window.setTimeout(() => {
+      configSaveStatus.value = '保存成功'
+    }, 350)
+    window.setTimeout(() => {
+      configSaveStatus.value = ''
+    }, 1800)
   }
 }
 
@@ -179,13 +196,23 @@ watch(
       <!-- API Key (按模型显示) -->
       <div v-if="currentModel !== 'ollama'" class="mb-3">
         <label class="block text-xs text-slate-400 mb-1">API Key</label>
-        <input
-          type="password"
-          :value="llmModels?.find?.(m => m.id === currentModel)?.api_key || ''"
-          @input="updateModelApiKey(($event.target as HTMLInputElement).value)"
-          placeholder="sk-xxxxxxxxxxxxxxxx"
-          class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
-        />
+        <div class="flex gap-2">
+          <input
+            type="password"
+            :value="llmModels?.find?.(m => m.id === currentModel)?.api_key || ''"
+            @input="updateModelApiKey(($event.target as HTMLInputElement).value)"
+            @blur="saveCurrentApiKey"
+            placeholder="sk-xxxxxxxxxxxxxxxx"
+            class="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+          />
+          <button
+            @click="saveCurrentApiKey"
+            class="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded text-white text-sm"
+          >
+            保存
+          </button>
+        </div>
+        <div v-if="configSaveStatus" class="mt-1 text-xs text-emerald-300">{{ configSaveStatus }}</div>
       </div>
       
       <!-- Base URL (如果有) -->

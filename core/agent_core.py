@@ -1,5 +1,4 @@
 from __future__ import annotations
-import re
 from typing import Optional, List, Dict
 import json
 import logging
@@ -78,20 +77,6 @@ SYSTEM_PROMPTS = {
 }
 
 
-def filter_history_for_chat(history: List[Dict]) -> List[Dict]:
-    """过滤历史记录中的所有 JSON 结构，物理层面脱敏"""
-    json_pattern = re.compile(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', re.DOTALL)
-    bracket_pattern = re.compile(r'\[[^\]]*\]')
-    
-    filtered = []
-    for msg in history:
-        content = msg.get("content", "")
-        if json_pattern.search(content) or bracket_pattern.search(content):
-            content = "[已过滤的实体配置数据]"
-        filtered.append({"role": msg.get("role"), "content": content})
-    return filtered
-
-
 # ============ 独立函数：聊天模式 ============
 async def handle_chat_mode(llm_provider: AgentCoordinator, user_text: str) -> Dict:
     """💡 创意助理模式 - 纯文本对话"""
@@ -99,7 +84,6 @@ async def handle_chat_mode(llm_provider: AgentCoordinator, user_text: str) -> Di
     logger.info(f"【Chat模式】正在调用 {provider_name} 处理闲聊请求")
     
     history = memory_manager.get_messages_for_llm("chat")
-    filtered_history = filter_history_for_chat(history)
 
     scene_state_prompt = _format_scene_state_for_prompt()
     if scene_state_prompt:
@@ -108,7 +92,7 @@ async def handle_chat_mode(llm_provider: AgentCoordinator, user_text: str) -> Di
     response = await llm_provider._llm_provider.generate_text(
         system_prompt=SYSTEM_PROMPTS['chat'],
         user_text=user_text,
-        history=filtered_history
+        history=history
     )
     
     logger.info(f"【Chat模式】成功获取文本回复")
@@ -180,11 +164,15 @@ async def handle_build_mode(llm_provider: AgentCoordinator, user_text: str,
     logger.info(f"【Build模式】正在调用 {provider_name} 处理实体生成请求")
     
     system_prompt = _build_build_system_prompt(game_base, required_components)
-    full_prompt = f"{system_prompt}{_format_scene_state_for_prompt()}\n\n用户需求：{user_text}"
-    
+    scene_state = getattr(memory_manager, "current_scene_state", None)
     history = memory_manager.get_messages_for_llm("build")
     
-    json_string = await llm_provider._llm_provider.generate_entity_schema(full_prompt, history)
+    json_string = await llm_provider._llm_provider.generate_entity_schema(
+        system_prompt=system_prompt,
+        user_prompt=f"用户需求：{user_text}",
+        scene_state=scene_state if isinstance(scene_state, dict) else None,
+        history=history
+    )
     
     raw_data = _extract_json(json_string)
 

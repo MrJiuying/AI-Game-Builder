@@ -180,6 +180,15 @@ const currentModelConfig = computed(() => {
   return llmModels.value.find(m => m.id === currentModel.value)
 })
 
+watch(
+  [currentModel, llmModels],
+  () => {
+    const model = llmModels.value.find(m => m.id === currentModel.value)
+    apiKey.value = model?.api_key || ''
+  },
+  { immediate: true, deep: true }
+)
+
 const showAddModelModal = ref(false)
 const newModelForm = ref({ id: '', name: '', api_key: '', base_url: '' })
 
@@ -200,6 +209,32 @@ const isModelConfigured = computed(() => {
 })
 
 const API_BASE_URL = 'http://localhost:8000'
+
+const saveApiKeyConfig = async (value: string) => {
+  if (currentModel.value !== 'deepseek') return
+  const key = value.trim()
+  if (!key) return
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/config`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        deepseek_api_key: key
+      })
+    })
+    const result = await response.json()
+    if (response.ok && result.status === 'success') {
+      console.info('DeepSeek API Key 保存成功')
+    } else {
+      alert(`保存失败: ${result.detail || result.message || '未知错误'}`)
+    }
+  } catch (error) {
+    alert(`保存失败: ${error instanceof Error ? error.message : '网络错误'}`)
+  }
+}
 
 const sendMessage = async () => {
   if (!inputMessage.value.trim() || isLoading.value) return
@@ -452,6 +487,7 @@ const sendMessageWithCheck = async () => {
         :isModelConfigured="isModelConfigured"
         @send="sendMessageWithCheck"
         @addModel="addModel"
+        @save-api-key="saveApiKeyConfig"
       />
     </aside>
 

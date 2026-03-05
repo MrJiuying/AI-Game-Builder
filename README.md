@@ -31,7 +31,7 @@ EntityAssembler 装配 → 游戏实体
 
 ```bash
 # Python 依赖
-pip install fastapi uvicorn pydantic websockets
+pip install fastapi uvicorn pydantic websockets openai python-dotenv
 
 # 前端依赖
 cd frontend

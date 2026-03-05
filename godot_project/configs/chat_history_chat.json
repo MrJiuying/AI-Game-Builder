@@ -63,5 +63,25 @@
     "role": "assistant",
     "content": "[DeepSeek mock] 已收到指令，将生成适当的回复。用户输入: \n\n【当前 Godot 引擎实时状态反馈】：{\"entities\": [{\"components\": {\"HealthComponent\": {\"max_health\": 50.0}, \"HitboxComponent\": {\"damage\": 10.0}, \"VelocityComponent\": {\"acceleration\": 800.0, \"friction\": 600.0, \"max_speed\": 150.0}}, \"name\": \"EnemySkeleton\"}]}\n\n用户输入：场上现在有什么怪物？它的移动速度是多少？",
     "mode": "chat"
+  },
+  {
+    "role": "user",
+    "content": "场上现在有什么怪物？它的移动速度是多少？",
+    "mode": "chat"
+  },
+  {
+    "role": "assistant",
+    "content": "[已过滤的实体配置数据]",
+    "mode": "chat"
+  },
+  {
+    "role": "user",
+    "content": "场上现在有什么怪物？它的移动速度是多少？",
+    "mode": "chat"
+  },
+  {
+    "role": "assistant",
+    "content": "（根据你之前提到的数据）场上有一个名为“EnemySkeleton”的骷髅怪物。它的最大移动速度是150单位/秒，加速度是800，并且有600的摩擦力来模拟惯性效果。需要我帮你调整这个骷髅的速度数值，或者设计它的追击行为逻辑吗？",
+    "mode": "chat"
   }
 ]
