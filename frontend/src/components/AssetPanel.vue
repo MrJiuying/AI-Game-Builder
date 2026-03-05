@@ -27,6 +27,7 @@ interface SceneEntity {
 const props = defineProps<{
   assets: GameAsset[]
   abilityComponents: string[]
+  selectedSpriteName: string
   entityProperties: EntityProperty[]
   selectedEntity: string
   selectedImageProvider: string
@@ -46,12 +47,37 @@ const emit = defineEmits<{
   (e: 'update:artApiKey', value: string): void
   (e: 'update:artBaseUrl', value: string): void
   (e: 'test-connection'): void
+  (e: 'select-sprite', value: GameAsset): void
 }>()
 
 const activeTab = ref<'assets' | 'inspector'>('assets')
 const assetBrowserTab = ref<'sprites' | 'components'>('sprites')
 const showLoraConfig = ref(false)
 const loraModel = ref('none')
+
+const COMPONENT_CATEGORIES = {
+  Movement: { icon: '🏃', label: 'Movement' },
+  Combat: { icon: '⚔️', label: 'Combat' },
+  AI: { icon: '🤖', label: 'AI & Logic' },
+  Interaction: { icon: '🖱️', label: 'Interaction' },
+  World: { icon: '🌍', label: 'World' },
+  Systems: { icon: '🧰', label: 'Systems' },
+  VFX: { icon: '✨', label: 'VFX' },
+  Narrative: { icon: '💬', label: 'Narrative' },
+} as const
+
+type CategoryKey = keyof typeof COMPONENT_CATEGORIES
+
+const categoryOpenState = ref<Record<CategoryKey, boolean>>({
+  Movement: true,
+  Combat: true,
+  AI: true,
+  Interaction: true,
+  World: true,
+  Systems: true,
+  VFX: true,
+  Narrative: true,
+})
 
 const loraOptions = [
   { id: 'none', name: '无' },
@@ -66,6 +92,55 @@ const sceneEntities = computed<SceneEntity[]>(() => {
   if (!Array.isArray(entities)) return []
   return entities
 })
+
+const resolveComponentCategory = (componentName: string): CategoryKey => {
+  const raw = componentName.trim()
+  const normalized = raw.toLowerCase()
+
+  if (raw.includes(':')) {
+    const categoryPrefix = raw.split(':')[0].trim().toLowerCase()
+    if (categoryPrefix === 'movement') return 'Movement'
+    if (categoryPrefix === 'combat') return 'Combat'
+    if (categoryPrefix === 'ai' || categoryPrefix === 'logic') return 'AI'
+    if (categoryPrefix === 'interaction') return 'Interaction'
+    if (categoryPrefix === 'world') return 'World'
+    if (categoryPrefix === 'systems' || categoryPrefix === 'system') return 'Systems'
+    if (categoryPrefix === 'vfx') return 'VFX'
+    if (categoryPrefix === 'narrative' || categoryPrefix === 'avg') return 'Narrative'
+  }
+
+  if (normalized.includes('movement') || normalized.includes('velocity') || normalized.includes('gravity') || normalized.includes('pathfollow')) return 'Movement'
+  if (normalized.includes('health') || normalized.includes('damage') || normalized.includes('projectile') || normalized.includes('hitbox') || normalized.includes('hurtbox')) return 'Combat'
+  if (normalized.includes('chase') || normalized.includes('patrol') || normalized.includes('detection') || normalized.includes('target')) return 'AI'
+  if (normalized.includes('trigger') || normalized.includes('collectible') || normalized.includes('interact') || normalized.includes('click')) return 'Interaction'
+  if (normalized.includes('parallax') || normalized.includes('camera') || normalized.includes('world')) return 'World'
+  if (normalized.includes('inventory') || normalized.includes('gamestate') || normalized.includes('flag')) return 'Systems'
+  if (normalized.includes('animation') || normalized.includes('effect') || normalized.includes('vfx')) return 'VFX'
+  if (normalized.includes('dialogue') || normalized.includes('charactervisual') || normalized.includes('narrative')) return 'Narrative'
+  return 'Systems'
+}
+
+const groupedAbilityComponents = computed(() => {
+  const grouped: Record<CategoryKey, string[]> = {
+    Movement: [],
+    Combat: [],
+    AI: [],
+    Interaction: [],
+    World: [],
+    Systems: [],
+    VFX: [],
+    Narrative: [],
+  }
+  for (const comp of props.abilityComponents) {
+    const displayName = comp.includes(':') ? comp.split(':').slice(1).join(':').trim() : comp
+    grouped[resolveComponentCategory(comp)].push(displayName)
+  }
+  return grouped
+})
+
+const toggleCategoryPanel = (category: CategoryKey) => {
+  categoryOpenState.value[category] = !categoryOpenState.value[category]
+}
 
 const handleSliderChange = (propertyName: string, event: Event) => {
   const value = parseFloat((event.target as HTMLInputElement).value)
@@ -101,6 +176,10 @@ const handleArtBaseUrlChange = (event: Event) => {
 
 const handleTestConnection = () => {
   emit('test-connection')
+}
+
+const selectSprite = (asset: GameAsset) => {
+  emit('select-sprite', asset)
 }
 </script>
 
@@ -290,25 +369,57 @@ const handleTestConnection = () => {
           <div
             v-for="asset in assets"
             :key="asset.id"
-            class="rounded-lg border border-slate-700 bg-slate-800/70 overflow-hidden hover:border-cyan-700 transition-colors"
+            @click="selectSprite(asset)"
+            :class="[
+              'rounded-lg border bg-slate-800/70 overflow-hidden transition-colors cursor-pointer',
+              selectedSpriteName === asset.name
+                ? 'border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.25)]'
+                : 'border-slate-700 hover:border-cyan-700'
+            ]"
           >
             <div class="aspect-square bg-slate-900">
               <img :src="asset.url" :alt="asset.name" class="w-full h-full object-contain" />
             </div>
-            <div class="px-2 py-1.5 text-[11px] text-slate-300 truncate">{{ asset.name }}</div>
+            <div class="px-2 py-1.5 flex items-center justify-between gap-2">
+              <div class="text-[11px] text-slate-300 truncate">{{ asset.name }}</div>
+              <div v-if="selectedSpriteName === asset.name" class="text-[10px] text-cyan-300 shrink-0">已选中</div>
+            </div>
           </div>
           <div v-if="assets.length === 0" class="col-span-2 text-xs text-slate-500">
             暂无可用贴图资源
           </div>
         </div>
 
-        <div v-else class="flex flex-wrap gap-2">
+        <div v-else class="space-y-2">
           <div
-            v-for="comp in abilityComponents"
-            :key="comp"
-            class="px-2.5 py-1 rounded-full text-xs border border-blue-700 bg-blue-900/30 text-blue-200"
+            v-for="(meta, category) in COMPONENT_CATEGORIES"
+            :key="category"
+            class="rounded-lg border border-slate-700 bg-slate-900/60 overflow-hidden"
           >
-            {{ comp }}
+            <button
+              @click="toggleCategoryPanel(category as CategoryKey)"
+              class="w-full px-3 py-2 flex items-center justify-between text-left bg-slate-800/70 hover:bg-slate-800 transition-colors"
+            >
+              <div class="flex items-center gap-2">
+                <span>{{ meta.icon }}</span>
+                <span class="text-xs font-semibold text-slate-200">{{ meta.label }}</span>
+                <span class="text-[10px] text-slate-500">({{ groupedAbilityComponents[category as CategoryKey].length }})</span>
+              </div>
+              <span class="text-slate-400 text-xs">{{ categoryOpenState[category as CategoryKey] ? '▾' : '▸' }}</span>
+            </button>
+
+            <div v-if="categoryOpenState[category as CategoryKey]" class="p-3 flex flex-wrap gap-2">
+              <div
+                v-for="comp in groupedAbilityComponents[category as CategoryKey]"
+                :key="`${category}-${comp}`"
+                class="px-2.5 py-1 rounded-full text-xs border border-cyan-700/60 bg-cyan-900/20 text-cyan-200"
+              >
+                {{ comp }}
+              </div>
+              <div v-if="groupedAbilityComponents[category as CategoryKey].length === 0" class="text-xs text-slate-500">
+                暂无组件
+              </div>
+            </div>
           </div>
           <div v-if="abilityComponents.length === 0" class="text-xs text-slate-500">
             暂无能力芯片

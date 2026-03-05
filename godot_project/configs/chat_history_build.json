@@ -68,5 +68,15 @@
     "role": "assistant",
     "content": "生成了实体 EnemySkeleton，包含组件: ['VelocityComponent', 'HealthComponent', 'HitboxComponent']",
     "mode": "build"
+  },
+  {
+    "role": "user",
+    "content": "基于 top_down_rpg 底座，生成一个新实体并挂载以下组件：PlayerInputComponent、HealthComponent、InventoryComponent，并使用贴图 EnemySkeleton_aa19aa82.png。请给出合理参数。",
+    "mode": "build"
+  },
+  {
+    "role": "assistant",
+    "content": "视觉化组装实体 EnemySkeleton_aa19aa82 完成",
+    "mode": "build"
   }
 ]

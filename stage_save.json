@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "EnemySkeleton_aa19aa82": {
+      "entity_name": "EnemySkeleton_aa19aa82",
+      "base_type": "CharacterBody2D",
+      "components": [
+        "PlayerInputComponent",
+        "HealthComponent",
+        "InventoryComponent"
+      ],
+      "component_params": {
+        "PlayerInputComponent": {},
+        "HealthComponent": {},
+        "InventoryComponent": {}
+      },
+      "sprite_path": "res://assets/sprites/EnemySkeleton_aa19aa82.png",
+      "metadata": {
+        "source": "visual_assembly",
+        "game_base": "top_down_rpg"
+      }
+    }
+  },
+  "global_config": {
+    "background_image": "",
+    "background_color": "#0f172a",
+    "physics_gravity": 980.0
+  }
+}

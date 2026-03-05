@@ -9,6 +9,8 @@ import asyncio
 import uuid
 import subprocess
 import os
+import sys
+import socket
 from pathlib import Path
 from asyncio import Queue
 from dotenv import load_dotenv
@@ -84,6 +86,7 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+stage_process: Optional[subprocess.Popen] = None
 
 
 class GenerateEntityRequest(BaseModel):
@@ -97,6 +100,11 @@ class GenerateEntityRequest(BaseModel):
     art_base_url: Optional[str] = None
     game_base: Optional[str] = "top-down-rpg"
     required_components: Optional[List[str]] = []
+    direct_assembly: Optional[bool] = False
+    entity_name: Optional[str] = None
+    sprite_name: Optional[str] = None
+    sprite_path: Optional[str] = None
+    component_params: Optional[Dict[str, Dict[str, Any]]] = None
 
 
 class TestImageProviderRequest(BaseModel):
@@ -113,6 +121,23 @@ class ConfigRequest(BaseModel):
     deepseek_api_key: str
 
 
+class SceneConfigRequest(BaseModel):
+    background_image: Optional[str] = None
+    background_color: Optional[str] = None
+    physics_gravity: Optional[float] = None
+
+
+class StageActivateRequest(BaseModel):
+    godot_path: Optional[str] = None
+    port: Optional[int] = 8060
+    preset: Optional[str] = "Web"
+    skip_export: Optional[bool] = False
+
+
+class GodotPathConfigRequest(BaseModel):
+    godot_path: str
+
+
 class GenerateEntityResponse(BaseModel):
     status: str
     entity_name: Optional[str] = None
@@ -121,6 +146,7 @@ class GenerateEntityResponse(BaseModel):
     error: Optional[str] = None
     text_reply: Optional[str] = None
     art_prompt: Optional[str] = None
+    sprite_path: Optional[str] = None
     mode: Optional[str] = "build"
 
 
@@ -159,18 +185,46 @@ def _upsert_env_key(file_path: Path, key: str, value: str) -> None:
     file_path.write_text("\n".join(updated_lines) + "\n", encoding="utf-8")
 
 
-def _load_stage_save() -> Dict[str, Dict[str, Any]]:
+def _default_global_config() -> Dict[str, Any]:
+    return {
+        "background_image": "",
+        "background_color": "#0f172a",
+        "physics_gravity": 980.0,
+    }
+
+
+def _normalize_stage_save(data: Any) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        return {"entities": {}, "global_config": _default_global_config()}
+
+    if "entities" in data or "global_config" in data:
+        entities = data.get("entities", {})
+        global_config = data.get("global_config", {})
+        if not isinstance(entities, dict):
+            entities = {}
+        if not isinstance(global_config, dict):
+            global_config = {}
+        merged_config = _default_global_config()
+        merged_config.update({k: v for k, v in global_config.items() if v is not None})
+        return {"entities": entities, "global_config": merged_config}
+
+    entities = {k: v for k, v in data.items() if isinstance(v, dict)}
+    return {"entities": entities, "global_config": _default_global_config()}
+
+
+def _load_stage_save() -> Dict[str, Any]:
     if not STAGE_SAVE_PATH.exists():
-        return {}
+        return {"entities": {}, "global_config": _default_global_config()}
     try:
         data = json.loads(STAGE_SAVE_PATH.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
+        return _normalize_stage_save(data)
     except Exception:
-        return {}
+        return {"entities": {}, "global_config": _default_global_config()}
 
 
-def _write_stage_save(data: Dict[str, Dict[str, Any]]) -> None:
-    STAGE_SAVE_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+def _write_stage_save(data: Dict[str, Any]) -> None:
+    normalized = _normalize_stage_save(data)
+    STAGE_SAVE_PATH.write_text(json.dumps(normalized, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _upsert_saved_spawn(entity_data: Dict[str, Any]) -> None:
@@ -178,7 +232,11 @@ def _upsert_saved_spawn(entity_data: Dict[str, Any]) -> None:
     if not entity_name:
         return
     stage_data = _load_stage_save()
-    stage_data[entity_name] = entity_data
+    entities = stage_data.get("entities", {})
+    if not isinstance(entities, dict):
+        entities = {}
+    entities[entity_name] = entity_data
+    stage_data["entities"] = entities
     _write_stage_save(stage_data)
 
 
@@ -190,7 +248,11 @@ def _upsert_saved_update(action_data: Dict[str, Any]) -> None:
         return
 
     stage_data = _load_stage_save()
-    current = stage_data.get(entity_name, {})
+    entities = stage_data.get("entities", {})
+    if not isinstance(entities, dict):
+        entities = {}
+
+    current = entities.get(entity_name, {})
     if not isinstance(current, dict):
         current = {}
 
@@ -216,15 +278,38 @@ def _upsert_saved_update(action_data: Dict[str, Any]) -> None:
     current["sprite_path"] = current.get("sprite_path", "")
     current["metadata"] = current.get("metadata", {})
 
-    stage_data[entity_name] = current
+    entities[entity_name] = current
+    stage_data["entities"] = entities
     _write_stage_save(stage_data)
+
+
+def _update_global_config(config_update: Dict[str, Any]) -> Dict[str, Any]:
+    stage_data = _load_stage_save()
+    current_config = stage_data.get("global_config", {})
+    if not isinstance(current_config, dict):
+        current_config = _default_global_config()
+    merged = _default_global_config()
+    merged.update(current_config)
+    merged.update({k: v for k, v in config_update.items() if v is not None})
+    stage_data["global_config"] = merged
+    _write_stage_save(stage_data)
+    return merged
 
 
 async def _restore_stage_for_connection(websocket: WebSocket) -> None:
     stage_data = _load_stage_save()
-    if not stage_data:
+    global_config = stage_data.get("global_config", {})
+    if isinstance(global_config, dict):
+        await websocket.send_json(
+            {
+                "action": "update_scene_config",
+                "config": global_config,
+            }
+        )
+    entities = stage_data.get("entities", {})
+    if not isinstance(entities, dict):
         return
-    for entity_name, entity_config in stage_data.items():
+    for entity_name, entity_config in entities.items():
         if not isinstance(entity_config, dict):
             continue
         await websocket.send_json(
@@ -260,6 +345,18 @@ async def get_scene_state():
     if isinstance(state, dict):
         return state
     return {}
+
+
+@app.post("/api/scene/config")
+async def update_scene_config(request: SceneConfigRequest):
+    config_update: Dict[str, Any] = {
+        "background_image": request.background_image,
+        "background_color": request.background_color,
+        "physics_gravity": request.physics_gravity,
+    }
+    merged_config = _update_global_config(config_update)
+    await manager.broadcast({"action": "update_scene_config", "config": merged_config})
+    return {"status": "success", "global_config": merged_config}
 
 
 @app.get("/api/assets/list")
@@ -309,6 +406,16 @@ async def websocket_endpoint(websocket: WebSocket):
                     logger.info("收到 sync_state，已写入 MemoryManager.current_scene_state")
                 else:
                     logger.warning(f"sync_state.data 不是 dict: {state_data}")
+            elif action == "engine_ready":
+                stage_url = message.get("stage_url", "http://127.0.0.1:8060")
+                await manager.broadcast(
+                    {
+                        "action": "engine_ready",
+                        "stage_url": stage_url,
+                        "source": message.get("source", "unknown"),
+                    }
+                )
+                logger.info(f"收到 engine_ready 并已广播: {stage_url}")
             else:
                 logger.info(f"收到未知 action: {action}")
 
@@ -385,6 +492,70 @@ async def generate_entity(request: GenerateEntityRequest):
         
         # ==================== BUILD 模式 (默认) ====================
         else:
+            config_dir = GODOT_PROJECT_PATH / "configs"
+            config_dir.mkdir(parents=True, exist_ok=True)
+
+            async def persist_and_broadcast(entity_name: str, json_data: Dict[str, Any], success_message: str) -> GenerateEntityResponse:
+                file_name = f"{entity_name}_{uuid.uuid4().hex[:8]}.json"
+                config_path = config_dir / file_name
+                with open(config_path, "w", encoding="utf-8") as f:
+                    json.dump(json_data, f, ensure_ascii=False, indent=2)
+                _upsert_saved_spawn(json_data)
+                await manager.broadcast(
+                    {
+                        "action": "spawn_entity",
+                        "config_path": str(config_path),
+                        "entity_name": entity_name,
+                    }
+                )
+                return GenerateEntityResponse(
+                    status="success",
+                    entity_name=entity_name,
+                    config_path=str(config_path),
+                    message=success_message,
+                    mode="build"
+                )
+
+            if request.direct_assembly:
+                raw_entity_name = (request.entity_name or "").strip()
+                sprite_name = (request.sprite_name or "").strip()
+                if not raw_entity_name and sprite_name:
+                    raw_entity_name = Path(sprite_name).stem
+                entity_name = raw_entity_name or f"VisualEntity_{uuid.uuid4().hex[:6]}"
+
+                sprite_path = (request.sprite_path or "").strip()
+                if not sprite_path and sprite_name:
+                    sprite_path = f"res://assets/sprites/{sprite_name}"
+
+                components = []
+                for comp in request.required_components or []:
+                    comp_name = str(comp).strip()
+                    if comp_name and comp_name not in components:
+                        components.append(comp_name)
+
+                component_params: Dict[str, Dict[str, Any]] = {}
+                if isinstance(request.component_params, dict):
+                    for comp_name, comp_params in request.component_params.items():
+                        if isinstance(comp_params, dict):
+                            component_params[str(comp_name)] = comp_params
+                for comp_name in components:
+                    if comp_name not in component_params:
+                        component_params[comp_name] = {}
+
+                json_data = {
+                    "entity_name": entity_name,
+                    "base_type": "CharacterBody2D",
+                    "components": components,
+                    "component_params": component_params,
+                    "sprite_path": sprite_path,
+                    "metadata": {
+                        "source": "visual_assembly",
+                        "game_base": request.game_base or "",
+                    },
+                }
+                memory_manager.add_message("assistant", f"视觉化组装实体 {entity_name} 完成", mode)
+                return await persist_and_broadcast(entity_name, json_data, f"✅ 实体 [{entity_name}] 视觉化组装完成！")
+
             from core.agent_core import handle_build_mode
             result = await handle_build_mode(
                 coordinator, 
@@ -415,12 +586,6 @@ async def generate_entity(request: GenerateEntityRequest):
             # Leave empty by default; Godot side will use a safe fallback texture.
             entity_config.sprite_path = ""
             
-            config_dir = GODOT_PROJECT_PATH / "configs"
-            config_dir.mkdir(parents=True, exist_ok=True)
-            
-            file_name = f"{entity_config.entity_name}_{uuid.uuid4().hex[:8]}.json"
-            config_path = config_dir / file_name
-            
             json_data = {
                 "entity_name": entity_config.entity_name,
                 "base_type": entity_config.base_type,
@@ -429,27 +594,7 @@ async def generate_entity(request: GenerateEntityRequest):
                 "sprite_path": entity_config.sprite_path,
                 "metadata": entity_config.metadata
             }
-            
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(json_data, f, ensure_ascii=False, indent=2)
-            _upsert_saved_spawn(json_data)
-            
-            logger.info(f"实体配置已保存: {config_path}")
-            
-            broadcast_message = {
-                "action": "spawn_entity",
-                "config_path": str(config_path),
-                "entity_name": entity_config.entity_name
-            }
-            await manager.broadcast(broadcast_message)
-            
-            return GenerateEntityResponse(
-                status="success",
-                entity_name=entity_config.entity_name,
-                config_path=str(config_path),
-                message=f"✅ 实体 [{entity_config.entity_name}] 装配成功！",
-                mode="build"
-            )
+            return await persist_and_broadcast(entity_config.entity_name, json_data, f"✅ 实体 [{entity_config.entity_name}] 装配成功！")
         
     except ProviderOfflineError as e:
         logger.error(f"图片提供者离线: {e}")
@@ -637,6 +782,148 @@ async def launch_godot(request: LaunchGodotRequest = None):
     except Exception as e:
         logger.error(f"启动 Godot 失败: {e}")
         return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/system/godot_path")
+async def get_godot_path():
+    path = os.getenv("GODOT_PATH", "").strip()
+    return {"status": "success", "godot_path": path}
+
+
+@app.post("/api/system/godot_path")
+async def set_godot_path(request: GodotPathConfigRequest):
+    godot_path = request.godot_path.strip()
+    if not godot_path:
+        raise HTTPException(status_code=400, detail="godot_path 不能为空")
+    _upsert_env_key(ENV_PATH, "GODOT_PATH", godot_path)
+    os.environ["GODOT_PATH"] = godot_path
+    load_dotenv(dotenv_path=ENV_PATH, override=True)
+    return {"status": "success", "message": "GODOT_PATH 已保存", "godot_path": godot_path}
+
+
+@app.get("/api/stage/status")
+async def stage_status():
+    running = stage_process is not None and stage_process.poll() is None
+    return {
+        "status": "success",
+        "running": running,
+        "pid": stage_process.pid if running and stage_process is not None else None
+    }
+
+
+def _is_port_listening(host: str, port: int) -> bool:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            return s.connect_ex((host, port)) == 0
+    except Exception:
+        return False
+
+
+@app.get("/api/stage/precheck")
+async def stage_precheck(port: int = 8060, preset: str = "Web"):
+    env_godot_path = os.getenv("GODOT_PATH", "").strip()
+    path_ok = bool(env_godot_path) and Path(env_godot_path).exists()
+    preset_file = Path(__file__).parent / "godot_project" / "export_presets.cfg"
+    preset_file_ok = preset_file.exists()
+    preset_name_ok = False
+    if preset_file_ok:
+        content = preset_file.read_text(encoding="utf-8", errors="ignore")
+        preset_name_ok = f'name="{preset}"' in content
+    return {
+        "status": "success",
+        "checks": {
+            "godot_path_ok": path_ok,
+            "export_preset_ok": preset_file_ok and preset_name_ok,
+            "port_listening_ok": _is_port_listening("127.0.0.1", port),
+        },
+        "meta": {
+            "godot_path": env_godot_path,
+            "preset": preset,
+            "port": port,
+            "export_preset_file_exists": preset_file_ok,
+            "export_preset_name_exists": preset_name_ok,
+        }
+    }
+
+
+@app.post("/api/stage/activate")
+async def activate_stage(request: StageActivateRequest):
+    global stage_process
+    running = stage_process is not None and stage_process.poll() is None
+    if running:
+        return {
+            "status": "success",
+            "message": "舞台服务已在运行",
+            "pid": stage_process.pid
+        }
+
+    run_stage_path = Path(__file__).parent / "run_stage.py"
+    if not run_stage_path.exists():
+        raise HTTPException(status_code=500, detail=f"未找到脚本: {run_stage_path}")
+
+    env_godot_path = os.getenv("GODOT_PATH", "").strip()
+    godot_path = (request.godot_path or "").strip() or env_godot_path
+    if not request.skip_export:
+        if not godot_path:
+            raise HTTPException(
+                status_code=400,
+                detail="未配置 GODOT_PATH。请在系统设置填写 Godot.exe 路径，或在环境变量中设置 GODOT_PATH。"
+            )
+        if not Path(godot_path).exists():
+            raise HTTPException(
+                status_code=400,
+                detail=f"GODOT_PATH 无效: {godot_path}"
+            )
+        preset_file = Path(__file__).parent / "godot_project" / "export_presets.cfg"
+        if not preset_file.exists():
+            raise HTTPException(
+                status_code=400,
+                detail="缺少 godot_project/export_presets.cfg，请先在 Godot 配置 HTML5 导出预设。"
+            )
+
+    cmd = [
+        sys.executable,
+        str(run_stage_path),
+        "--port",
+        str(request.port or 8060),
+        "--preset",
+        request.preset or "Web",
+    ]
+    if request.skip_export:
+        cmd.append("--skip-export")
+    if godot_path:
+        cmd.extend(["--godot-path", godot_path])
+        _upsert_env_key(ENV_PATH, "GODOT_PATH", godot_path)
+        os.environ["GODOT_PATH"] = godot_path
+        load_dotenv(dotenv_path=ENV_PATH, override=True)
+
+    try:
+        stage_process = subprocess.Popen(
+            cmd,
+            cwd=str(Path(__file__).parent),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        await asyncio.sleep(1.0)
+        if stage_process.poll() is not None:
+            stderr_text = stage_process.stderr.read() if stage_process.stderr else ""
+            stdout_text = stage_process.stdout.read() if stage_process.stdout else ""
+            stage_process = None
+            raise HTTPException(
+                status_code=500,
+                detail=f"run_stage.py 启动后立即退出。\nstdout: {stdout_text}\nstderr: {stderr_text}"
+            )
+        return {
+            "status": "success",
+            "message": "Godot Web Activator 已启动",
+            "pid": stage_process.pid,
+            "port": request.port or 8060
+        }
+    except Exception as e:
+        logger.error(f"启动 run_stage.py 失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/system/select_file")
