@@ -174,16 +174,10 @@ async def generate_entity(request: GenerateEntityRequest):
         # 保存用户消息到记忆
         memory_manager.add_message("user", request.prompt, mode)
         
-        # 使用统一的请求处理入口
-        result = await coordinator.process_request(
-            mode=mode,
-            user_text=request.prompt,
-            game_base=request.game_base,
-            required_components=request.required_components
-        )
-        
         # ==================== CHAT 模式 ====================
         if mode == "chat":
+            from core.agent_core import handle_chat_mode
+            result = await handle_chat_mode(coordinator, request.prompt)
             text_reply = result["content"]
             memory_manager.add_message("assistant", text_reply, mode)
             
@@ -196,6 +190,8 @@ async def generate_entity(request: GenerateEntityRequest):
         
         # ==================== ART 模式 ====================
         elif mode == "art":
+            from core.agent_core import handle_art_mode
+            result = await handle_art_mode(coordinator, request.prompt)
             art_prompt = result["content"]
             
             try:
@@ -230,6 +226,13 @@ async def generate_entity(request: GenerateEntityRequest):
         
         # ==================== BUILD 模式 (默认) ====================
         else:
+            from core.agent_core import handle_build_mode
+            result = await handle_build_mode(
+                coordinator, 
+                request.prompt, 
+                request.game_base, 
+                request.required_components
+            )
             entity_config = result["entity_config"]
             
             ai_response = f"生成了实体 {entity_config.entity_name}，包含组件: {[c.component_name for c in entity_config.components]}"
