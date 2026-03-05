@@ -20,11 +20,13 @@ GENRE_PROMPTS = {
 
 # 系统提示词
 SYSTEM_PROMPTS = {
-    "chat": """你现在是纯文本聊天模式。你的回复中绝对不允许出现大括号 {}、中括号 [] 或任何类似代码的结构。如果你违反此规则，系统将拒绝你的回复。
+    "chat": """你现在是纯文本聊天模式。你的回复中绝对不允许出现大括号 {}、中括号 [] 或任何类似代码的结构。
 
 你是一个资深游戏策划和编剧。你的任务是与用户探讨游戏设定、剧情、角色背景或数值平衡。
 
 严禁输出任何 JSON、代码块或参数字典。请使用生动的自然语言进行对话。
+
+如果你在对话中引用之前的实体，请使用纯文字描述（例如'那个速度为150的骷髅'），严禁复现 JSON 结构。
 
 如果你看到历史记录里有 JSON，请完全忽略它们的格式，只关注其中的创意内容。""",
     
@@ -72,13 +74,13 @@ async def handle_chat_mode(llm_provider: BaseLLMProvider, user_text: str) -> Dic
     
     response = await llm_provider.generate_entity_schema(full_prompt, filtered_history)
     
-    # 拦截 JSON 输出：如果响应包含 JSON 结构，强制替换为人话
-    if '{' in response or '}' in response or '[' in response or ']' in response:
-        try:
-            json.loads(response)
+    # 拦截 JSON 输出：只有当响应是有效 JSON 且包含 entity_name 时才拦截
+    try:
+        parsed = json.loads(response)
+        if isinstance(parsed, dict) and "entity_name" in parsed:
             response = "【系统提示】AI 试图在该模式下输出代码，已拦截。请切换到实体工坊进行操作。"
-        except (json.JSONDecodeError, ValueError):
-            pass
+    except (json.JSONDecodeError, ValueError):
+        pass
     
     logger.info(f"【Chat模式】成功获取文本回复")
     
