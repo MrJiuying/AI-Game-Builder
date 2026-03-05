@@ -316,63 +316,60 @@ watch(
           </button>
         </div>
       </div>
-    </div>
-  </div>
-</template>
 
-<!-- 添加模型弹窗 -->
-<div v-if="showAddModelModal" class="fixed inset-0 z-50 flex items-center justify-center">
-  <div class="absolute inset-0 bg-black/60" @click="emit('update:showAddModelModal', false)"></div>
-  <div class="relative bg-slate-800 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md p-6">
-    <h3 class="text-lg font-bold text-gray-200 mb-4">添加自定义模型</h3>
-    <div class="space-y-4">
-      <div>
-        <label class="block text-xs text-slate-400 mb-1">模型标识 (ID)</label>
-        <input
-          v-model="newModelForm.id"
-          placeholder="如: my-gpt4"
-          class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200"
-        />
+      <!-- 添加模型弹窗 -->
+      <div v-if="showAddModelModal" class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/60" @click="emit('update:showAddModelModal', false)"></div>
+        <div class="relative bg-slate-800 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md p-6">
+      <h3 class="text-lg font-bold text-gray-200 mb-4">添加自定义模型</h3>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">模型标识 (ID)</label>
+          <input
+            v-model="newModelForm.id"
+            placeholder="如: my-gpt4"
+            class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200"
+          />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">显示名称</label>
+          <input
+            v-model="newModelForm.name"
+            placeholder="如: My GPT-4"
+            class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200"
+          />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">API Key</label>
+          <input
+            v-model="newModelForm.api_key"
+            placeholder="sk-..."
+            type="password"
+            class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200"
+          />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Base URL (可选)</label>
+          <input
+            v-model="newModelForm.base_url"
+            placeholder="如: https://api.openai.com/v1"
+            class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200"
+          />
+        </div>
       </div>
-      <div>
-        <label class="block text-xs text-slate-400 mb-1">显示名称</label>
-        <input
-          v-model="newModelForm.name"
-          placeholder="如: My GPT-4"
-          class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200"
-        />
-      </div>
-      <div>
-        <label class="block text-xs text-slate-400 mb-1">API Key</label>
-        <input
-          v-model="newModelForm.api_key"
-          placeholder="sk-..."
-          type="password"
-          class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200"
-        />
-      </div>
-      <div>
-        <label class="block text-xs text-slate-400 mb-1">Base URL (可选)</label>
-        <input
-          v-model="newModelForm.base_url"
-          placeholder="如: https://api.openai.com/v1"
-          class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200"
-        />
+      <div class="flex justify-end gap-3 mt-6">
+        <button
+          @click="emit('update:showAddModelModal', false)"
+          class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-gray-200"
+        >
+          取消
+        </button>
+        <button
+          @click="emit('addModel'); emit('update:showAddModelModal', false)"
+          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white"
+        >
+          添加
+        </button>
       </div>
     </div>
-    <div class="flex justify-end gap-3 mt-6">
-      <button
-        @click="emit('update:showAddModelModal', false)"
-        class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-gray-200"
-      >
-        取消
-      </button>
-      <button
-        @click="emit('addModel')"
-        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white"
-      >
-        添加
-      </button>
-    </div>
-  </div>
-</div>
+</template>
