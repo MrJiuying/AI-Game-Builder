@@ -35,6 +35,7 @@ const props = defineProps<{
   gameTypes: GameType[]
   llmModels: LLMModel[]
   selectedComponents: string[]
+  currentMode: string
 }>()
 
 const emit = defineEmits<{
@@ -43,8 +44,20 @@ const emit = defineEmits<{
   (e: 'update:inputMessage', value: string): void
   (e: 'update:selectedGameType', value: string): void
   (e: 'update:selectedComponents', value: string[]): void
+  (e: 'update:currentMode', value: string): void
   (e: 'send'): void
 }>()
+
+const modes = [
+  { id: 'chat', name: '💡 创意助理', placeholder: '向 AI 询问设定、构思剧情或数值规划...' },
+  { id: 'build', name: '🛠️ 实体工坊', placeholder: '描述你想构建或修改的游戏实体...' },
+  { id: 'art', name: '🎨 美术中心', placeholder: '描述你想生成的美术资产或图标...' }
+]
+
+const currentPlaceholder = computed(() => {
+  const mode = modes.find(m => m.id === props.currentMode)
+  return mode?.placeholder || '描述你想要的游戏内容...'
+})
 
 // 游戏底座组件配置表
 const genreComponents = {
@@ -185,10 +198,21 @@ watch(
 
     <!-- 底部：对话流区域 -->
     <div class="flex-1 flex flex-col min-h-0">
-      <div class="px-4 py-2 border-b border-slate-700 bg-slate-800/30">
-        <h3 class="text-xs uppercase tracking-wider text-slate-400 font-semibold">
-          对话流
-        </h3>
+      <!-- 模式切换 Tab -->
+      <div class="px-2 py-2 border-b border-slate-700 bg-slate-800/30 flex gap-1">
+        <button
+          v-for="mode in modes"
+          :key="mode.id"
+          @click="emit('update:currentMode', mode.id)"
+          :class="[
+            'flex-1 py-1.5 px-2 rounded text-xs font-medium transition-all duration-200',
+            currentMode === mode.id
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 hover:text-slate-300'
+          ]"
+        >
+          {{ mode.name }}
+        </button>
       </div>
       
       <!-- 消息列表 -->
@@ -236,7 +260,7 @@ watch(
             :value="inputMessage"
             @input="emit('update:inputMessage', ($event.target as HTMLInputElement).value)"
             @keydown="handleKeydown"
-            placeholder="描述你想要的游戏内容..."
+            :placeholder="currentPlaceholder"
             :disabled="isLoading"
             class="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-sm text-gray-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
           />

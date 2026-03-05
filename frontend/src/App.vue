@@ -38,6 +38,7 @@ const currentModel = ref('deepseek')
 const apiKey = ref('')
 const inputMessage = ref('')
 const selectedGameType = ref('top-down-rpg')
+const currentMode = ref('build')
 const isLoading = ref(false)
 const selectedImageProvider = ref('local_sd')
 const customLora = ref('')
@@ -149,6 +150,7 @@ const sendMessage = async () => {
       },
       body: JSON.stringify({
         prompt: userInput,
+        mode: currentMode.value,
         model_name: currentModel.value,
         api_key: apiKey.value || undefined,
         image_provider: selectedImageProvider.value,
@@ -323,6 +325,7 @@ const sendMessageWithCheck = async () => {
         v-model:inputMessage="inputMessage"
         v-model:selectedGameType="selectedGameType"
         v-model:selectedComponents="selectedComponents"
+        v-model:currentMode="currentMode"
         :chatMessages="chatMessages"
         :isLoading="isLoading"
         :gameTypes="gameTypes"

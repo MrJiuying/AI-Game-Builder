@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "role": "user",
+    "content": "你好"
+  },
+  {
+    "role": "assistant",
+    "content": "生成了实体 EnemySkeleton，包含组件: ['VelocityComponent', 'HealthComponent', 'HitboxComponent']"
+  }
+]

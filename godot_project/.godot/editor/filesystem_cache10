@@ -1,10 +1,12 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1772681920
+::res://::1772686481
 ::res://assets/::1772629819
-::res://assets/sprites/::1772681936
+::res://assets/sprites/::1772686489
 EnemySkeleton_0b14ed3b.png::CompressedTexture2D::6971248400913851011::1772681439::1772681439::1::::<><><>0<>0<>8dd2938eb6fab2c6a3d01161b437625e<>res://.godot/imported/EnemySkeleton_0b14ed3b.png-1885ece72511b25d0f079ab63452ec8f.ctex::
 EnemySkeleton_0f1f822c.png::CompressedTexture2D::410715842171086156::1772678571::1772679707::1::::<><><>0<>0<>e2c70491c873c0f49513a91a9c7c6256<>res://.godot/imported/EnemySkeleton_0f1f822c.png-84ef4aed36a672c720757162c03aef37.ctex::
+EnemySkeleton_7ea5e29b.png::CompressedTexture2D::3695651167043623015::1772686489::1772686494::1::::<><><>0<>0<>5dcdb35e6fc549b84013589a68fe47fc<>res://.godot/imported/EnemySkeleton_7ea5e29b.png-8ff7d94dc6dc64ee2c7e86a15cd2dd91.ctex::
 EnemySkeleton_08be856b.png::CompressedTexture2D::6267768021445971672::1772679196::1772679707::1::::<><><>0<>0<>92ccb42c5c073b22753293eb6855cd9c<>res://.godot/imported/EnemySkeleton_08be856b.png-5e32652934909d3a037e0fa4f29af7bd.ctex::
+EnemySkeleton_9a3f010d.png::CompressedTexture2D::1578883308566252158::1772686301::1772686482::1::::<><><>0<>0<>83a9cb4fc9d75e913707393f25a4dcef<>res://.godot/imported/EnemySkeleton_9a3f010d.png-a7b0d1d8faf790e41543fcee763f9558.ctex::
 EnemySkeleton_9b3a57a2.png::CompressedTexture2D::2831941137746038262::1772681936::1772681942::1::::<><><>0<>0<>1f64cfd70643c17201217dc68619f0a8<>res://.godot/imported/EnemySkeleton_9b3a57a2.png-a521e158fa343ab96e56433bc42c1cd6.ctex::
 EnemySkeleton_9c264b6b.png::CompressedTexture2D::1771231138402387813::1772681727::1772681738::1::::<><><>0<>0<>652e46ec5638aa35e4c69cf11ccb25fe<>res://.godot/imported/EnemySkeleton_9c264b6b.png-72475b44eca620f55cc9c2c554e1bb78.ctex::
 EnemySkeleton_052a8ce2.png::CompressedTexture2D::2595174985680094223::1772677617::1772679707::1::::<><><>0<>0<>267bd0fb510faa53397aebb2344cae6b<>res://.godot/imported/EnemySkeleton_052a8ce2.png-421e5a495d447863f3e5e8e56506f8e3.ctex::
@@ -22,7 +24,8 @@ HitboxComponent.gd::GDScript::1157218882350186041::1772669329::0::1::::HitboxCom
 HurtboxComponent.gd::GDScript::1440851846769481858::1772669329::0::1::::HurtboxComponent<>Area2D<><>0<>0<><>::
 TopDownMovementComponent.gd::GDScript::3837908592020244222::1772681337::0::1::::TopDownMovementComponent<>Node<><>0<>0<><>::
 VelocityComponent.gd::GDScript::3432417565150467413::1772681881::0::1::::VelocityComponent<>Node<><>0<>0<><>::
-::res://configs/::1772681936
+::res://configs/::1772686489
+chat_history.json::JSON::-1::1772686485::0::1::::<><><>0<>0<><>::
 EnemySkeleton_0c565a89.json::JSON::-1::1772630692::0::1::::<><><>0<>0<><>::
 EnemySkeleton_2a68ce65.json::JSON::-1::1772681936::0::1::::<><><>0<>0<><>::
 EnemySkeleton_4bf9064c.json::JSON::-1::1772676118::0::1::::<><><>0<>0<><>::
@@ -38,6 +41,7 @@ EnemySkeleton_337a3ab2.json::JSON::-1::1772681727::0::1::::<><><>0<>0<><>::
 EnemySkeleton_957b0089.json::JSON::-1::1772678856::0::1::::<><><>0<>0<><>::
 EnemySkeleton_5317c000.json::JSON::-1::1772678317::0::1::::<><><>0<>0<><>::
 EnemySkeleton_59649a02.json::JSON::-1::1772681145::0::1::::<><><>0<>0<><>::
+EnemySkeleton_24019380.json::JSON::-1::1772686489::0::1::::<><><>0<>0<><>::
 EnemySkeleton_58343519.json::JSON::-1::1772676015::0::1::::<><><>0<>0<><>::
 EnemySkeleton_a74ae27d.json::JSON::-1::1772629999::0::1::::<><><>0<>0<><>::
 EnemySkeleton_a3686fd2.json::JSON::-1::1772679727::0::1::::<><><>0<>0<><>::
@@ -45,10 +49,11 @@ EnemySkeleton_b0e0d993.json::JSON::-1::1772679196::0::1::::<><><>0<>0<><>::
 EnemySkeleton_d9eaf2a0.json::JSON::-1::1772679779::0::1::::<><><>0<>0<><>::
 EnemySkeleton_d3626c35.json::JSON::-1::1772677617::0::1::::<><><>0<>0<><>::
 EnemySkeleton_db998e7c.json::JSON::-1::1772681439::0::1::::<><><>0<>0<><>::
+EnemySkeleton_eff53e02.json::JSON::-1::1772686301::0::1::::<><><>0<>0<><>::
 ::res://scenes/::1772673799
-PreviewStage.tscn::PackedScene::-1::1772681917::0::1::::<><><>0<>0<><>::res://scripts/LiveLink.gd
+PreviewStage.tscn::PackedScene::-1::1772686478::0::1::::<><><>0<>0<><>::res://scripts/LiveLink.gd
 ::res://scripts/::1772679707
-LiveLink.gd::GDScript::3387155227284513708::1772681917::0::1::::<>Node2D<><>0<>0<><>::
+LiveLink.gd::GDScript::3387155227284513708::1772686478::0::1::::<>Node2D<><>0<>0<><>::
 ::res://scripts/autoload/::1772679707
 AutoTestRunner.gd::GDScript::9220681983110186513::1772669329::0::1::::AutoTestRunner<>Node2D<><>0<>0<><>::
 EntityAssembler.gd::GDScript::6766621527310463733::1772677526::0::1::::EntityAssembler<>Node<><>0<>0<><>::
