@@ -115,3 +115,26 @@ class AgentCoordinator:
     def switch_provider(self, new_provider: BaseLLMProvider) -> None:
         self._llm_provider = new_provider
         logger.info(f"已切换 LLM 提供者: {new_provider.get_provider_name()}")
+
+    async def chat_mode(self, user_text: str) -> str:
+        CHAT_SYSTEM_PROMPT = """你是一个资深的游戏制作人与世界观架构师。请用专业的、富有启发性的语言与用户探讨游戏设定、剧情或数值平衡。不需要生成任何代码或JSON。"""
+        
+        full_prompt = f"{CHAT_SYSTEM_PROMPT}\n\n用户：{user_text}"
+        logger.info(f"【Chat模式】正在调用 {self._llm_provider.get_provider_name()} 处理闲聊请求")
+        
+        history = memory_manager.get_messages_for_llm()
+        response = await self._llm_provider.generate_entity_schema(full_prompt, history)
+        
+        logger.info(f"【Chat模式】成功获取文本回复")
+        return response
+
+    async def art_mode(self, user_text: str) -> str:
+        ART_SYSTEM_PROMPT = """你是一个资深的 AI 美术提示词工程师。用户会输入他们想要的资产，请你提炼出最适合 Stable Diffusion 的英文正向提示词（Prompt）。只输出英文提示词，不要解释。"""
+        
+        full_prompt = f"{ART_SYSTEM_PROMPT}\n\n用户需求：{user_text}"
+        logger.info(f"【Art模式】正在调用 {self._llm_provider.get_provider_name()} 处理美术提示词")
+        
+        response = await self._llm_provider.generate_entity_schema(full_prompt)
+        
+        logger.info(f"【Art模式】成功获取提示词: {response[:50]}...")
+        return response

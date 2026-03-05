@@ -78,6 +78,7 @@ manager = ConnectionManager()
 
 class GenerateEntityRequest(BaseModel):
     prompt: str
+    mode: Optional[str] = "build"
     model_name: Optional[str] = "deepseek"
     api_key: Optional[str] = None
     image_provider: Optional[str] = "local_sd"
@@ -104,6 +105,9 @@ class GenerateEntityResponse(BaseModel):
     config_path: Optional[str] = None
     message: Optional[str] = None
     error: Optional[str] = None
+    text_reply: Optional[str] = None
+    art_prompt: Optional[str] = None
+    mode: Optional[str] = "build"
 
 
 def get_llm_provider(model_name: str, api_key: Optional[str] = None) -> AgentCoordinator:
@@ -161,7 +165,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.post("/api/generate_entity", response_model=GenerateEntityResponse)
 async def generate_entity(request: GenerateEntityRequest):
-    logger.info(f"收到生成请求: model={request.model_name}, image_provider={request.image_provider}, prompt={request.prompt[:50]}...")
+    mode = request.mode or "build"
+    logger.info(f"收到生成请求: mode={mode}, model={request.model_name}, prompt={request.prompt[:50]}...")
     
     try:
         coordinator = get_llm_provider(request.model_name, request.api_key)
@@ -169,75 +174,115 @@ async def generate_entity(request: GenerateEntityRequest):
         # 保存用户消息到记忆
         memory_manager.add_message("user", request.prompt)
         
-        # 1. 调用 LLM 获取游戏配置和美术提示词
-        entity_config = await coordinator.process_user_intent(
-            request.prompt, 
-            game_base=request.game_base,
-            required_components=request.required_components
-        )
+        # ==================== CHAT 模式 ====================
+        if mode == "chat":
+            text_reply = await coordinator.chat_mode(request.prompt)
+            memory_manager.add_message("assistant", text_reply)
+            
+            return GenerateEntityResponse(
+                status="success",
+                message=text_reply,
+                text_reply=text_reply,
+                mode="chat"
+            )
         
-        # 保存 AI 响应到记忆
-        ai_response = f"生成了实体 {entity_config.entity_name}，包含组件: {[c.component_name for c in entity_config.components]}"
-        memory_manager.add_message("assistant", ai_response)
+        # ==================== ART 模式 ====================
+        elif mode == "art":
+            art_prompt = await coordinator.art_mode(request.prompt)
+            
+            try:
+                art_api_key = request.art_api_key or request.api_key
+                image_bytes = await image_coordinator.generate_image(
+                    provider_name=request.image_provider,
+                    prompt=art_prompt,
+                    lora_model=request.lora_model,
+                    api_key=art_api_key,
+                    base_url=request.art_base_url
+                )
+                
+                sprite_path = await project_manager.save_generated_asset(image_bytes, f"art_{uuid.uuid4().hex[:8]}")
+                memory_manager.add_message("assistant", f"生成了美术资产，提示词: {art_prompt}")
+                
+                return GenerateEntityResponse(
+                    status="success",
+                    message=f"🎨 美术资产生成成功！\n\n📝 提示词: {art_prompt}",
+                    text_reply=art_prompt,
+                    art_prompt=art_prompt,
+                    sprite_path=sprite_path,
+                    mode="art"
+                )
+            except ProviderOfflineError as e:
+                logger.warning(f"图片提供者离线: {e}")
+                return GenerateEntityResponse(
+                    status="error",
+                    message=f"❌ 图片生成失败: {e}",
+                    error=str(e),
+                    mode="art"
+                )
         
-        # 2. 生成美术提示词（这里简化处理，实际应该从 LLM 输出中提取）
-        art_prompt = f"生成一个 {entity_config.entity_name} 的 2D 游戏角色，清晰、风格化，适合俯视角游戏"
-        
-        # 3. 生成图片
-        try:
-            # 对于云端图片提供者，使用美术专用 API Key
-            art_api_key = request.art_api_key or request.api_key
-            image_bytes = await image_coordinator.generate_image(
-                provider_name=request.image_provider,
-                prompt=art_prompt,
-                lora_model=request.lora_model,
-                api_key=art_api_key,
-                base_url=request.art_base_url
+        # ==================== BUILD 模式 (默认) ====================
+        else:
+            entity_config = await coordinator.process_user_intent(
+                request.prompt, 
+                game_base=request.game_base,
+                required_components=request.required_components
             )
             
-            # 4. 保存图片
-            sprite_path = await project_manager.save_generated_asset(image_bytes, entity_config.entity_name)
-            entity_config.sprite_path = sprite_path
-        except ProviderOfflineError as e:
-            logger.warning(f"图片提供者离线: {e}")
-            # 继续流程，使用默认图片
-            entity_config.sprite_path = "res://icon.svg"
-        
-        # 5. 保存 JSON 配置
-        config_dir = GODOT_PROJECT_PATH / "configs"
-        config_dir.mkdir(parents=True, exist_ok=True)
-        
-        file_name = f"{entity_config.entity_name}_{uuid.uuid4().hex[:8]}.json"
-        config_path = config_dir / file_name
-        
-        json_data = {
-            "entity_name": entity_config.entity_name,
-            "base_type": entity_config.base_type,
-            "components": [c.component_name for c in entity_config.components],
-            "component_params": {c.component_name: c.parameters for c in entity_config.components},
-            "sprite_path": entity_config.sprite_path,
-            "metadata": entity_config.metadata
-        }
-        
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(json_data, f, ensure_ascii=False, indent=2)
-        
-        logger.info(f"实体配置已保存: {config_path}")
-        
-        # 6. 广播给 Godot
-        broadcast_message = {
-            "action": "spawn_entity",
-            "config_path": str(config_path),
-            "entity_name": entity_config.entity_name
-        }
-        await manager.broadcast(broadcast_message)
-        
-        return GenerateEntityResponse(
-            status="success",
-            entity_name=entity_config.entity_name,
-            config_path=str(config_path),
-            message=f"成功生成实体 {entity_config.entity_name}"
-        )
+            ai_response = f"生成了实体 {entity_config.entity_name}，包含组件: {[c.component_name for c in entity_config.components]}"
+            memory_manager.add_message("assistant", ai_response)
+            
+            art_prompt_for_sd = f"生成一个 {entity_config.entity_name} 的 2D 游戏角色，清晰、风格化，适合俯视角游戏"
+            
+            try:
+                art_api_key = request.art_api_key or request.api_key
+                image_bytes = await image_coordinator.generate_image(
+                    provider_name=request.image_provider,
+                    prompt=art_prompt_for_sd,
+                    lora_model=request.lora_model,
+                    api_key=art_api_key,
+                    base_url=request.art_base_url
+                )
+                
+                sprite_path = await project_manager.save_generated_asset(image_bytes, entity_config.entity_name)
+                entity_config.sprite_path = sprite_path
+            except ProviderOfflineError as e:
+                logger.warning(f"图片提供者离线: {e}")
+                entity_config.sprite_path = "res://icon.svg"
+            
+            config_dir = GODOT_PROJECT_PATH / "configs"
+            config_dir.mkdir(parents=True, exist_ok=True)
+            
+            file_name = f"{entity_config.entity_name}_{uuid.uuid4().hex[:8]}.json"
+            config_path = config_dir / file_name
+            
+            json_data = {
+                "entity_name": entity_config.entity_name,
+                "base_type": entity_config.base_type,
+                "components": [c.component_name for c in entity_config.components],
+                "component_params": {c.component_name: c.parameters for c in entity_config.components},
+                "sprite_path": entity_config.sprite_path,
+                "metadata": entity_config.metadata
+            }
+            
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(json_data, f, ensure_ascii=False, indent=2)
+            
+            logger.info(f"实体配置已保存: {config_path}")
+            
+            broadcast_message = {
+                "action": "spawn_entity",
+                "config_path": str(config_path),
+                "entity_name": entity_config.entity_name
+            }
+            await manager.broadcast(broadcast_message)
+            
+            return GenerateEntityResponse(
+                status="success",
+                entity_name=entity_config.entity_name,
+                config_path=str(config_path),
+                message=f"✅ 实体 [{entity_config.entity_name}] 装配成功！",
+                mode="build"
+            )
         
     except ProviderOfflineError as e:
         logger.error(f"图片提供者离线: {e}")
