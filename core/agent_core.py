@@ -57,126 +57,138 @@ def filter_history_for_chat(history: List[Dict]) -> List[Dict]:
     return filtered
 
 
+# ============ 独立函数：聊天模式 ============
+async def handle_chat_mode(llm_provider: BaseLLMProvider, user_text: str) -> Dict:
+    """💡 创意助理模式 - 纯文本对话"""
+    logger.info(f"【Chat模式】正在调用 {llm_provider.get_provider_name()} 处理闲聊请求")
+    
+    history = memory_manager.get_messages_for_llm("chat")
+    filtered_history = filter_history_for_chat(history)
+    
+    full_prompt = f"{SYSTEM_PROMPTS['chat']}\n\n用户：{user_text}"
+    
+    response = await llm_provider.generate_entity_schema(full_prompt, filtered_history)
+    
+    logger.info(f"【Chat模式】成功获取文本回复")
+    
+    return {
+        "type": "text",
+        "content": response
+    }
+
+
+# ============ 独立函数：构建模式 ============
+def _build_build_system_prompt(game_base: str, required_components: list = None) -> str:
+    genre_prompt = GENRE_PROMPTS.get(game_base, "")
+    system_prompt = SYSTEM_PROMPTS["build"]
+    
+    full_prompt = f"{system_prompt}\n\n{genre_prompt}"
+    
+    if required_components and len(required_components) > 0:
+        components_text = ", ".join(required_components)
+        full_prompt += f"\n\n用户已强制要求挂载以下组件：{components_text}。"
+    
+    return full_prompt
+
+
+def _extract_json(raw_string: str) -> dict:
+    cleaned = raw_string.strip()
+    
+    if cleaned.startswith("```json"):
+        cleaned = cleaned[7:]
+    elif cleaned.startswith("```"):
+        cleaned = cleaned[3:]
+    
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3]
+    
+    cleaned = cleaned.strip()
+    
+    return json.loads(cleaned)
+
+
+def _validate_and_parse(data: dict) -> EntityConfig:
+    entity_name = data.get("entity_name", "UnnamedEntity")
+    base_type = data.get("base_type", "Node2D")
+    
+    components = []
+    for comp_data in data.get("components", []):
+        comp_name = comp_data.get("component_name", "")
+        comp_params = comp_data.get("parameters", {})
+        
+        components.append(ComponentConfig(
+            component_name=comp_name,
+            parameters=comp_params
+        ))
+    
+    return EntityConfig(
+        entity_name=entity_name,
+        base_type=base_type,
+        components=components,
+        sprite_path=data.get("sprite_path"),
+        metadata=data.get("metadata", {})
+    )
+
+
+async def handle_build_mode(llm_provider: BaseLLMProvider, user_text: str, 
+                           game_base: str = "top-down-rpg", 
+                           required_components: list = None) -> Dict:
+    """🛠️ 实体工坊模式 - JSON 实体生成"""
+    logger.info(f"【Build模式】正在调用 {llm_provider.get_provider_name()} 处理实体生成请求")
+    
+    system_prompt = _build_build_system_prompt(game_base, required_components)
+    full_prompt = f"{system_prompt}\n\n用户需求：{user_text}"
+    
+    history = memory_manager.get_messages_for_llm("build")
+    
+    json_string = await llm_provider.generate_entity_schema(full_prompt, history)
+    
+    raw_data = _extract_json(json_string)
+    
+    entity_config = _validate_and_parse(raw_data)
+    
+    logger.info(f"【Build模式】成功生成实体配置: {entity_config.entity_name}")
+    
+    return {
+        "type": "entity",
+        "entity_config": entity_config
+    }
+
+
+# ============ 独立函数：美术模式 ============
+async def handle_art_mode(llm_provider: BaseLLMProvider, user_text: str) -> Dict:
+    """🎨 美术中心模式 - SD Prompt 生成"""
+    logger.info(f"【Art模式】正在调用 {llm_provider.get_provider_name()} 处理美术提示词")
+    
+    full_prompt = f"{SYSTEM_PROMPTS['art']}\n\n用户需求：{user_text}"
+    
+    response = await llm_provider.generate_entity_schema(full_prompt)
+    
+    logger.info(f"【Art模式】成功获取提示词: {response[:50]}...")
+    
+    return {
+        "type": "art_prompt",
+        "content": response
+    }
+
+
+# ============ AgentCoordinator 类（保留兼容性） ============
 class AgentCoordinator:
     def __init__(self, llm_provider: BaseLLMProvider):
         self._llm_provider = llm_provider
-
-    def _build_build_system_prompt(self, game_base: str, required_components: list = None) -> str:
-        genre_prompt = GENRE_PROMPTS.get(game_base, "")
-        system_prompt = SYSTEM_PROMPTS["build"]
-        
-        full_prompt = f"{system_prompt}\n\n{genre_prompt}"
-        
-        if required_components and len(required_components) > 0:
-            components_text = ", ".join(required_components)
-            full_prompt += f"\n\n用户已强制要求挂载以下组件：{components_text}。"
-        
-        return full_prompt
 
     async def process_request(self, mode: str, user_text: str, game_base: str = "top-down-rpg", 
                              required_components: list = None) -> Dict:
         """统一的请求处理入口，根据 mode 分发"""
         
         if mode == "chat":
-            return await self._process_chat(user_text)
+            return await handle_chat_mode(self._llm_provider, user_text)
         elif mode == "build":
-            return await self._process_build(user_text, game_base, required_components)
+            return await handle_build_mode(self._llm_provider, user_text, game_base, required_components)
         elif mode == "art":
-            return await self._process_art(user_text)
+            return await handle_art_mode(self._llm_provider, user_text)
         else:
             raise ValueError(f"Unknown mode: {mode}")
-
-    async def _process_chat(self, user_text: str) -> Dict:
-        """💡 创意助理模式 - 纯文本对话"""
-        logger.info(f"【Chat模式】正在调用 {self._llm_provider.get_provider_name()} 处理闲聊请求")
-        
-        history = memory_manager.get_messages_for_llm("chat")
-        filtered_history = filter_history_for_chat(history)
-        
-        full_prompt = f"{SYSTEM_PROMPTS['chat']}\n\n用户：{user_text}"
-        
-        response = await self._llm_provider.generate_entity_schema(full_prompt, filtered_history)
-        
-        logger.info(f"【Chat模式】成功获取文本回复")
-        
-        return {
-            "type": "text",
-            "content": response
-        }
-
-    async def _process_build(self, user_text: str, game_base: str, required_components: list = None) -> Dict:
-        """🛠️ 实体工坊模式 - JSON 实体生成"""
-        logger.info(f"【Build模式】正在调用 {self._llm_provider.get_provider_name()} 处理实体生成请求")
-        
-        system_prompt = self._build_build_system_prompt(game_base, required_components)
-        full_prompt = f"{system_prompt}\n\n用户需求：{user_text}"
-        
-        history = memory_manager.get_messages_for_llm("build")
-        
-        json_string = await self._llm_provider.generate_entity_schema(full_prompt, history)
-        
-        raw_data = self._extract_json(json_string)
-        
-        entity_config = self._validate_and_parse(raw_data)
-        
-        logger.info(f"【Build模式】成功生成实体配置: {entity_config.entity_name}")
-        
-        return {
-            "type": "entity",
-            "entity_config": entity_config
-        }
-
-    async def _process_art(self, user_text: str) -> Dict:
-        """🎨 美术中心模式 - SD Prompt 生成"""
-        logger.info(f"【Art模式】正在调用 {self._llm_provider.get_provider_name()} 处理美术提示词")
-        
-        full_prompt = f"{SYSTEM_PROMPTS['art']}\n\n用户需求：{user_text}"
-        
-        response = await self._llm_provider.generate_entity_schema(full_prompt)
-        
-        logger.info(f"【Art模式】成功获取提示词: {response[:50]}...")
-        
-        return {
-            "type": "art_prompt",
-            "content": response
-        }
-
-    def _extract_json(self, raw_string: str) -> dict:
-        cleaned = raw_string.strip()
-        
-        if cleaned.startswith("```json"):
-            cleaned = cleaned[7:]
-        elif cleaned.startswith("```"):
-            cleaned = cleaned[3:]
-        
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        
-        cleaned = cleaned.strip()
-        
-        return json.loads(cleaned)
-
-    def _validate_and_parse(self, data: dict) -> EntityConfig:
-        entity_name = data.get("entity_name", "UnnamedEntity")
-        base_type = data.get("base_type", "Node2D")
-        
-        components = []
-        for comp_data in data.get("components", []):
-            comp_name = comp_data.get("component_name", "")
-            comp_params = comp_data.get("parameters", {})
-            
-            components.append(ComponentConfig(
-                component_name=comp_name,
-                parameters=comp_params
-            ))
-        
-        return EntityConfig(
-            entity_name=entity_name,
-            base_type=base_type,
-            components=components,
-            sprite_path=data.get("sprite_path"),
-            metadata=data.get("metadata", {})
-        )
 
     def switch_provider(self, new_provider: BaseLLMProvider) -> None:
         self._llm_provider = new_provider
@@ -184,10 +196,10 @@ class AgentCoordinator:
 
     async def chat_mode(self, user_text: str) -> str:
         """Legacy method for compatibility"""
-        result = await self._process_chat(user_text)
+        result = await handle_chat_mode(self._llm_provider, user_text)
         return result["content"]
 
     async def art_mode(self, user_text: str) -> str:
         """Legacy method for compatibility"""
-        result = await self._process_art(user_text)
+        result = await handle_art_mode(self._llm_provider, user_text)
         return result["content"]

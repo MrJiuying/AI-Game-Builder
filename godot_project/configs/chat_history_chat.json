@@ -18,5 +18,15 @@
     "role": "assistant",
     "content": "{\"entity_name\": \"EnemySkeleton\", \"base_type\": \"CharacterBody2D\", \"components\": [{\"component_name\": \"VelocityComponent\", \"parameters\": {\"max_speed\": 150.0, \"acceleration\": 800.0, \"friction\": 600.0}}, {\"component_name\": \"HealthComponent\", \"parameters\": {\"max_health\": 50.0}}, {\"component_name\": \"HitboxComponent\", \"parameters\": {\"damage\": 10.0}}], \"sprite_path\": \"res://assets/sprites/enemy_skeleton.png\", \"metadata\": {\"ai_generated\": true}}",
     "mode": "chat"
+  },
+  {
+    "role": "user",
+    "content": "你好",
+    "mode": "chat"
+  },
+  {
+    "role": "assistant",
+    "content": "{\"entity_name\": \"EnemySkeleton\", \"base_type\": \"CharacterBody2D\", \"components\": [{\"component_name\": \"VelocityComponent\", \"parameters\": {\"max_speed\": 150.0, \"acceleration\": 800.0, \"friction\": 600.0}}, {\"component_name\": \"HealthComponent\", \"parameters\": {\"max_health\": 50.0}}, {\"component_name\": \"HitboxComponent\", \"parameters\": {\"damage\": 10.0}}], \"sprite_path\": \"res://assets/sprites/enemy_skeleton.png\", \"metadata\": {\"ai_generated\": true}}",
+    "mode": "chat"
   }
 ]
