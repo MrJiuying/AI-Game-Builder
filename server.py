@@ -15,6 +15,7 @@ from core.llm_providers import DeepSeekProvider, LocalOllamaProvider, OpenAIProv
 from core.project_manager import ProjectResourceManager
 from core.image_providers import ProviderOfflineError
 from core.image_router import ImageGeneratorCoordinator
+from core.memory_manager import memory_manager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -165,12 +166,19 @@ async def generate_entity(request: GenerateEntityRequest):
     try:
         coordinator = get_llm_provider(request.model_name, request.api_key)
         
+        # 保存用户消息到记忆
+        memory_manager.add_message("user", request.prompt)
+        
         # 1. 调用 LLM 获取游戏配置和美术提示词
         entity_config = await coordinator.process_user_intent(
             request.prompt, 
             game_base=request.game_base,
             required_components=request.required_components
         )
+        
+        # 保存 AI 响应到记忆
+        ai_response = f"生成了实体 {entity_config.entity_name}，包含组件: {[c.component_name for c in entity_config.components]}"
+        memory_manager.add_message("assistant", ai_response)
         
         # 2. 生成美术提示词（这里简化处理，实际应该从 LLM 输出中提取）
         art_prompt = f"生成一个 {entity_config.entity_name} 的 2D 游戏角色，清晰、风格化，适合俯视角游戏"
@@ -245,6 +253,18 @@ async def generate_entity(request: GenerateEntityRequest):
             error=str(e),
             message="生成过程中出现错误"
         )
+
+
+@app.get("/api/chat/history")
+async def get_chat_history():
+    history = memory_manager.get_history()
+    return {"status": "success", "history": history}
+
+
+@app.post("/api/chat/clear")
+async def clear_chat_history():
+    memory_manager.clear_history()
+    return {"status": "success", "message": "聊天历史已清空"}
 
 
 @app.get("/api/configs")

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import AIControlPanel from './components/AIControlPanel.vue'
 import GameStage from './components/GameStage.vue'
 import AssetPanel from './components/AssetPanel.vue'
@@ -69,6 +69,37 @@ const isGodotLaunched = ref(false)
 const selectedComponents = ref<string[]>([])
 const showSettingsModal = ref(false)
 const godotExePath = ref(localStorage.getItem('godot_path') || '')
+
+onMounted(async () => {
+  try {
+    const res = await fetch('http://localhost:8000/api/chat/history')
+    const data = await res.json()
+    if (data.status === 'success' && data.history && data.history.length > 0) {
+      chatMessages.value = data.history.map((m: any, idx: number) => ({
+        id: idx,
+        role: m.role,
+        content: m.content,
+        timestamp: new Date()
+      }))
+    }
+  } catch (e) {
+    console.error('加载聊天历史失败:', e)
+  }
+})
+
+const clearHistory = async () => {
+  try {
+    await fetch('http://localhost:8000/api/chat/clear', { method: 'POST' })
+    chatMessages.value = [{
+      id: 1,
+      role: 'assistant',
+      content: '你好！我是 AI Game Builder 助手。描述你想要创建的游戏角色或场景，我会帮你自动生成 Godot 实体配置。',
+      timestamp: new Date()
+    }]
+  } catch (e) {
+    console.error('清空聊天历史失败:', e)
+  }
+}
 
 const gameTypes = [
   { id: 'top_down_rpg', name: '俯视角 RPG', icon: '🗡️' },
@@ -280,6 +311,12 @@ const sendMessageWithCheck = async () => {
   <div class="h-screen w-screen flex bg-slate-950 text-gray-200 overflow-hidden">
     <!-- 左侧边栏：AI 核心控制舱 -->
     <aside class="w-1/4 min-w-[320px] flex flex-col bg-slate-900 border-r border-slate-700">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+        <h1 class="text-lg font-bold text-cyan-400">🎮 AI Game Builder</h1>
+        <button @click="clearHistory" class="text-xs text-slate-400 hover:text-red-400 transition-colors" title="清空记忆">
+          🗑️
+        </button>
+      </div>
       <AIControlPanel
         v-model:currentModel="currentModel"
         v-model:apiKey="apiKey"

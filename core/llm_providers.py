@@ -6,7 +6,7 @@ import asyncio
 
 class BaseLLMProvider(ABC):
     @abstractmethod
-    async def generate_entity_schema(self, prompt: str) -> str:
+    async def generate_entity_schema(self, prompt: str, history: list = None) -> str:
         pass
 
     @abstractmethod
@@ -22,7 +22,7 @@ class DeepSeekProvider(BaseLLMProvider):
     def get_provider_name(self) -> str:
         return "deepseek"
 
-    async def generate_entity_schema(self, prompt: str) -> str:
+    async def generate_entity_schema(self, prompt: str, history: list = None) -> str:
         await asyncio.sleep(0.1)
         
         mock_response = {
@@ -65,7 +65,7 @@ class LocalOllamaProvider(BaseLLMProvider):
     def get_provider_name(self) -> str:
         return "ollama"
 
-    async def generate_entity_schema(self, prompt: str) -> str:
+    async def generate_entity_schema(self, prompt: str, history: list = None) -> str:
         await asyncio.sleep(0.1)
         
         mock_response = {
@@ -106,7 +106,7 @@ class OpenAIProvider(BaseLLMProvider):
     def get_provider_name(self) -> str:
         return "openai"
 
-    async def generate_entity_schema(self, prompt: str) -> str:
+    async def generate_entity_schema(self, prompt: str, history: list = None) -> str:
         await asyncio.sleep(0.1)
         
         mock_response = {

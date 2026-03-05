@@ -4,6 +4,7 @@ import logging
 
 from core.llm_providers import BaseLLMProvider
 from core.models import EntityConfig, ComponentConfig
+from core.memory_manager import memory_manager
 
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,9 @@ class AgentCoordinator:
         
         logger.info(f"正在调用 {self._llm_provider.get_provider_name()} 处理请求，游戏底座: {game_base}")
         
-        json_string = await self._llm_provider.generate_entity_schema(full_prompt)
+        history = memory_manager.get_messages_for_llm()
+        
+        json_string = await self._llm_provider.generate_entity_schema(full_prompt, history)
         
         raw_data = self._extract_json(json_string)
         
