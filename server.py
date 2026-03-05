@@ -231,10 +231,6 @@ async def generate_entity(request: GenerateEntityRequest):
         # ==================== BUILD 模式 (默认) ====================
         else:
             entity_config = result["entity_config"]
-                request.prompt, 
-                game_base=request.game_base,
-                required_components=request.required_components
-            )
             
             ai_response = f"生成了实体 {entity_config.entity_name}，包含组件: {[c.component_name for c in entity_config.components]}"
             memory_manager.add_message("assistant", ai_response, mode)
