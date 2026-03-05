@@ -256,10 +256,23 @@ const sendMessage = async () => {
     const loadingIndex = chatMessages.value.findIndex(m => m.id === loadingMsgId)
     if (loadingIndex !== -1) {
       if (response.ok && result.status === 'success') {
+        // 根据模式区分处理响应
+        let content = ''
+        if (currentMode.value === 'chat') {
+          // Chat 模式：直接显示文本回复
+          content = result.text_reply || result.message || ''
+        } else if (currentMode.value === 'art') {
+          // Art 模式：显示美术资产信息
+          content = result.message || result.text_reply || ''
+        } else {
+          // Build 模式：显示实体装配成功信息
+          content = result.message || `✅ 实体 [${result.entity_name}] 装配成功！配置文件已送达引擎目录。\n\n📁 配置路径: ${result.config_path}`
+        }
+        
         chatMessages.value[loadingIndex] = {
           id: loadingMsgId,
           role: 'assistant',
-          content: `✅ 实体 [${result.entity_name}] 装配成功！配置文件已送达引擎目录。\n\n📁 配置路径: ${result.config_path}`,
+          content: content,
           timestamp: new Date()
         }
       } else {

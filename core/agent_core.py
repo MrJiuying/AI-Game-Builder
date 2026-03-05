@@ -72,6 +72,14 @@ async def handle_chat_mode(llm_provider: BaseLLMProvider, user_text: str) -> Dic
     
     response = await llm_provider.generate_entity_schema(full_prompt, filtered_history)
     
+    # 拦截 JSON 输出：如果响应包含 JSON 结构，强制替换为人话
+    if '{' in response or '}' in response or '[' in response or ']' in response:
+        try:
+            json.loads(response)
+            response = "【系统提示】AI 试图在该模式下输出代码，已拦截。请切换到实体工坊进行操作。"
+        except (json.JSONDecodeError, ValueError):
+            pass
+    
     logger.info(f"【Chat模式】成功获取文本回复")
     
     return {
