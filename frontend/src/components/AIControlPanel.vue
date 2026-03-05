@@ -160,11 +160,11 @@ watch(
       </div>
       
       <!-- API Key (按模型显示) -->
-      <div v-if="llmModels.find(m => m.id === currentModel)?.id !== 'ollama'" class="mb-3">
+      <div v-if="currentModel !== 'ollama'" class="mb-3">
         <label class="block text-xs text-slate-400 mb-1">API Key</label>
         <input
           type="password"
-          :value="llmModels.find(m => m.id === currentModel)?.api_key || ''"
+          :value="llmModels?.find?.(m => m.id === currentModel)?.api_key || ''"
           @input="updateModelApiKey(($event.target as HTMLInputElement).value)"
           placeholder="sk-xxxxxxxxxxxxxxxx"
           class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
@@ -172,11 +172,11 @@ watch(
       </div>
       
       <!-- Base URL (如果有) -->
-      <div v-if="llmModels.find(m => m.id === currentModel)?.base_url" class="mb-3">
+      <div v-if="llmModels?.find?.(m => m.id === currentModel)?.base_url" class="mb-3">
         <label class="block text-xs text-slate-400 mb-1">API Base URL</label>
         <input
           type="text"
-          :value="llmModels.find(m => m.id === currentModel)?.base_url || ''"
+          :value="llmModels?.find?.(m => m.id === currentModel)?.base_url || ''"
           readonly
           class="w-full bg-slate-800/50 border border-slate-700 rounded px-3 py-2 text-sm text-slate-400"
         />
@@ -301,13 +301,13 @@ watch(
             :value="inputMessage"
             @input="emit('update:inputMessage', ($event.target as HTMLInputElement).value)"
             @keydown="handleKeydown"
-            :placeholder="currentPlaceholder"
+            :placeholder="isModelConfigured ? currentPlaceholder : '请先在上方配置模型与 API Key...'"
             :disabled="isLoading"
             class="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-sm text-gray-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
           />
           <button
             @click="emit('send')"
-            :disabled="isLoading || !inputMessage.trim()"
+            :disabled="isLoading || !inputMessage.trim() || !isModelConfigured"
             class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed rounded-lg transition-colors duration-200"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
