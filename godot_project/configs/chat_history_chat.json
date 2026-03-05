@@ -8,5 +8,10 @@
     "role": "assistant",
     "content": "【系统提示】AI 试图在该模式下输出代码，已拦截。请切换到实体工坊进行操作。",
     "mode": "chat"
+  },
+  {
+    "role": "user",
+    "content": "你好",
+    "mode": "chat"
   }
 ]

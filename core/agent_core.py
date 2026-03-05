@@ -62,16 +62,17 @@ def filter_history_for_chat(history: List[Dict]) -> List[Dict]:
 
 
 # ============ 独立函数：聊天模式 ============
-async def handle_chat_mode(llm_provider: BaseLLMProvider, user_text: str) -> Dict:
+async def handle_chat_mode(llm_provider: AgentCoordinator, user_text: str) -> Dict:
     """💡 创意助理模式 - 纯文本对话"""
-    logger.info(f"【Chat模式】正在调用 {llm_provider.get_provider_name()} 处理闲聊请求")
+    provider_name = llm_provider._llm_provider.get_provider_name()
+    logger.info(f"【Chat模式】正在调用 {provider_name} 处理闲聊请求")
     
     history = memory_manager.get_messages_for_llm("chat")
     filtered_history = filter_history_for_chat(history)
     
     full_prompt = f"{SYSTEM_PROMPTS['chat']}\n\n用户：{user_text}"
     
-    response = await llm_provider.generate_entity_schema(full_prompt, filtered_history)
+    response = await llm_provider._llm_provider.generate_entity_schema(full_prompt, filtered_history)
     
     # 拦截 JSON 输出：只有当响应是有效 JSON 且包含 entity_name 时才拦截
     try:
@@ -142,18 +143,19 @@ def _validate_and_parse(data: dict) -> EntityConfig:
     )
 
 
-async def handle_build_mode(llm_provider: BaseLLMProvider, user_text: str, 
+async def handle_build_mode(llm_provider: AgentCoordinator, user_text: str, 
                            game_base: str = "top-down-rpg", 
                            required_components: list = None) -> Dict:
     """🛠️ 实体工坊模式 - JSON 实体生成"""
-    logger.info(f"【Build模式】正在调用 {llm_provider.get_provider_name()} 处理实体生成请求")
+    provider_name = llm_provider._llm_provider.get_provider_name()
+    logger.info(f"【Build模式】正在调用 {provider_name} 处理实体生成请求")
     
     system_prompt = _build_build_system_prompt(game_base, required_components)
     full_prompt = f"{system_prompt}\n\n用户需求：{user_text}"
     
     history = memory_manager.get_messages_for_llm("build")
     
-    json_string = await llm_provider.generate_entity_schema(full_prompt, history)
+    json_string = await llm_provider._llm_provider.generate_entity_schema(full_prompt, history)
     
     raw_data = _extract_json(json_string)
     
@@ -168,13 +170,14 @@ async def handle_build_mode(llm_provider: BaseLLMProvider, user_text: str,
 
 
 # ============ 独立函数：美术模式 ============
-async def handle_art_mode(llm_provider: BaseLLMProvider, user_text: str) -> Dict:
+async def handle_art_mode(llm_provider: AgentCoordinator, user_text: str) -> Dict:
     """🎨 美术中心模式 - SD Prompt 生成"""
-    logger.info(f"【Art模式】正在调用 {llm_provider.get_provider_name()} 处理美术提示词")
+    provider_name = llm_provider._llm_provider.get_provider_name()
+    logger.info(f"【Art模式】正在调用 {provider_name} 处理美术提示词")
     
     full_prompt = f"{SYSTEM_PROMPTS['art']}\n\n用户需求：{user_text}"
     
-    response = await llm_provider.generate_entity_schema(full_prompt)
+    response = await llm_provider._llm_provider.generate_entity_schema(full_prompt)
     
     logger.info(f"【Art模式】成功获取提示词: {response[:50]}...")
     
@@ -194,11 +197,11 @@ class AgentCoordinator:
         """统一的请求处理入口，根据 mode 分发"""
         
         if mode == "chat":
-            return await handle_chat_mode(self._llm_provider, user_text)
+            return await handle_chat_mode(self, user_text)
         elif mode == "build":
-            return await handle_build_mode(self._llm_provider, user_text, game_base, required_components)
+            return await handle_build_mode(self, user_text, game_base, required_components)
         elif mode == "art":
-            return await handle_art_mode(self._llm_provider, user_text)
+            return await handle_art_mode(self, user_text)
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
@@ -208,10 +211,10 @@ class AgentCoordinator:
 
     async def chat_mode(self, user_text: str) -> str:
         """Legacy method for compatibility"""
-        result = await handle_chat_mode(self._llm_provider, user_text)
+        result = await handle_chat_mode(self, user_text)
         return result["content"]
 
     async def art_mode(self, user_text: str) -> str:
         """Legacy method for compatibility"""
-        result = await handle_art_mode(self._llm_provider, user_text)
+        result = await handle_art_mode(self, user_text)
         return result["content"]
