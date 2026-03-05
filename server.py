@@ -172,12 +172,12 @@ async def generate_entity(request: GenerateEntityRequest):
         coordinator = get_llm_provider(request.model_name, request.api_key)
         
         # 保存用户消息到记忆
-        memory_manager.add_message("user", request.prompt)
+        memory_manager.add_message("user", request.prompt, mode)
         
         # ==================== CHAT 模式 ====================
         if mode == "chat":
             text_reply = await coordinator.chat_mode(request.prompt)
-            memory_manager.add_message("assistant", text_reply)
+            memory_manager.add_message("assistant", text_reply, mode)
             
             return GenerateEntityResponse(
                 status="success",
@@ -201,7 +201,7 @@ async def generate_entity(request: GenerateEntityRequest):
                 )
                 
                 sprite_path = await project_manager.save_generated_asset(image_bytes, f"art_{uuid.uuid4().hex[:8]}")
-                memory_manager.add_message("assistant", f"生成了美术资产，提示词: {art_prompt}")
+                memory_manager.add_message("assistant", f"生成了美术资产，提示词: {art_prompt}", mode)
                 
                 return GenerateEntityResponse(
                     status="success",
@@ -229,7 +229,7 @@ async def generate_entity(request: GenerateEntityRequest):
             )
             
             ai_response = f"生成了实体 {entity_config.entity_name}，包含组件: {[c.component_name for c in entity_config.components]}"
-            memory_manager.add_message("assistant", ai_response)
+            memory_manager.add_message("assistant", ai_response, mode)
             
             art_prompt_for_sd = f"生成一个 {entity_config.entity_name} 的 2D 游戏角色，清晰、风格化，适合俯视角游戏"
             
@@ -301,14 +301,14 @@ async def generate_entity(request: GenerateEntityRequest):
 
 
 @app.get("/api/chat/history")
-async def get_chat_history():
-    history = memory_manager.get_history()
-    return {"status": "success", "history": history}
+async def get_chat_history(mode: str = "build"):
+    history = memory_manager.get_history(mode)
+    return {"status": "success", "history": history, "mode": mode}
 
 
 @app.post("/api/chat/clear")
-async def clear_chat_history():
-    memory_manager.clear_history()
+async def clear_chat_history(mode: Optional[str] = None):
+    memory_manager.clear_history(mode)
     return {"status": "success", "message": "聊天历史已清空"}
 
 

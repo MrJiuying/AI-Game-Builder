@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import AIControlPanel from './components/AIControlPanel.vue'
 import GameStage from './components/GameStage.vue'
 import AssetPanel from './components/AssetPanel.vue'
@@ -75,7 +75,7 @@ const godotExePath = ref(localStorage.getItem('godot_path') || '')
 
 onMounted(async () => {
   try {
-    const res = await fetch('http://localhost:8000/api/chat/history')
+    const res = await fetch(`${API_BASE_URL}/api/chat/history?mode=${currentMode.value}`)
     const data = await res.json()
     if (data.status === 'success' && data.history && data.history.length > 0) {
       chatMessages.value = data.history.map((m: any, idx: number) => ({
@@ -84,6 +84,13 @@ onMounted(async () => {
         content: m.content,
         timestamp: new Date()
       }))
+    } else {
+      chatMessages.value = [{
+        id: 1,
+        role: 'assistant',
+        content: getWelcomeMessage(currentMode.value),
+        timestamp: new Date()
+      }]
     }
   } catch (e) {
     console.error('加载聊天历史失败:', e)
@@ -92,11 +99,11 @@ onMounted(async () => {
 
 const clearHistory = async () => {
   try {
-    await fetch('http://localhost:8000/api/chat/clear', { method: 'POST' })
+    await fetch(`${API_BASE_URL}/api/chat/clear?mode=${currentMode.value}`, { method: 'POST' })
     chatMessages.value = [{
       id: 1,
       role: 'assistant',
-      content: '你好！我是 AI Game Builder 助手。描述你想要创建的游戏角色或场景，我会帮你自动生成 Godot 实体配置。',
+      content: getWelcomeMessage(currentMode.value),
       timestamp: new Date()
     }]
   } catch (e) {
@@ -104,23 +111,103 @@ const clearHistory = async () => {
   }
 }
 
+const getWelcomeMessage = (mode: string) => {
+  switch (mode) {
+    case 'chat': return '💡 你好！我是创意助理。有什么游戏设定、剧情构思或数值平衡的问题，尽管问我！'
+    case 'art': return '🎨 你好！我是美术中心。描述你想生成的图像，我会帮你优化提示词并生成图片！'
+    default: return '🛠️ 你好！我是实体工坊。描述你想构建的游戏角色，我会帮你生成配置并装配到 Godot 中！'
+  }
+}
+
+watch(currentMode, async (newMode) => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/chat/history?mode=${newMode}`)
+    const data = await res.json()
+    if (data.status === 'success') {
+      if (data.history && data.history.length > 0) {
+        chatMessages.value = data.history.map((m: any, idx: number) => ({
+          id: idx,
+          role: m.role,
+          content: m.content,
+          timestamp: new Date()
+        }))
+      } else {
+        chatMessages.value = [{
+          id: 1,
+          role: 'assistant',
+          content: getWelcomeMessage(newMode),
+          timestamp: new Date()
+        }]
+      }
+    }
+  } catch (e) {
+    console.error('加载聊天历史失败:', e)
+  }
+})
+
 const gameTypes = [
   { id: 'top_down_rpg', name: '俯视角 RPG', icon: '🗡️' },
   { id: 'platformer', name: '横版跳跃', icon: '🏃' },
   { id: 'top_down_shooter', name: '俯视角射击', icon: '🔫' },
 ]
 
-const llmModels = [
-  { id: 'deepseek', name: 'DeepSeek' },
-  { id: 'claude', name: 'Claude' },
-  { id: 'ollama', name: '本地 Ollama' },
-  { id: 'gpt4', name: 'GPT-4' },
+const defaultModels = [
+  { id: 'deepseek', name: 'DeepSeek', api_key: '', base_url: '' },
+  { id: 'claude', name: 'Claude', api_key: '', base_url: '' },
+  { id: 'ollama', name: '本地 Ollama', api_key: '', base_url: 'http://localhost:11434' },
+  { id: 'gpt4', name: 'GPT-4', api_key: '', base_url: '' },
 ]
+
+const loadModelsFromStorage = () => {
+  const saved = localStorage.getItem('llm_models')
+  if (saved) {
+    try {
+      return JSON.parse(saved)
+    } catch {
+      return defaultModels
+    }
+  }
+  return defaultModels
+}
+
+const llmModels = ref(loadModelsFromStorage())
+
+const saveModelsToStorage = () => {
+  localStorage.setItem('llm_models', JSON.stringify(llmModels.value))
+}
+
+const currentModelConfig = computed(() => {
+  return llmModels.value.find(m => m.id === currentModel.value)
+})
+
+const showAddModelModal = ref(false)
+const newModelForm = ref({ id: '', name: '', api_key: '', base_url: '' })
+
+const addModel = () => {
+  if (!newModelForm.value.id || !newModelForm.value.name) return
+  llmModels.value.push({ ...newModelForm.value })
+  saveModelsToStorage()
+  currentModel.value = newModelForm.value.id
+  showAddModelModal.value = false
+  newModelForm.value = { id: '', name: '', api_key: '', base_url: '' }
+}
+
+const isModelConfigured = computed(() => {
+  const config = currentModelConfig.value
+  if (!config) return false
+  if (config.id === 'ollama') return true
+  return !!config.api_key
+})
 
 const API_BASE_URL = 'http://localhost:8000'
 
 const sendMessage = async () => {
   if (!inputMessage.value.trim() || isLoading.value) return
+  
+  if (!isModelConfigured.value) {
+    alert('⚠️ 请先选择并配置模型 API Key')
+    return
+  }
 
   const userMsg: ChatMessage = {
     id: Date.now(),
@@ -343,11 +430,15 @@ const sendMessageWithCheck = async () => {
         v-model:selectedGameType="selectedGameType"
         v-model:selectedComponents="selectedComponents"
         v-model:currentMode="currentMode"
+        v-model:showAddModelModal="showAddModelModal"
+        v-model:newModelForm="newModelForm"
         :chatMessages="chatMessages"
         :isLoading="isLoading"
         :gameTypes="gameTypes"
         :llmModels="llmModels"
+        :isModelConfigured="isModelConfigured"
         @send="sendMessageWithCheck"
+        @addModel="addModel"
       />
     </aside>
 

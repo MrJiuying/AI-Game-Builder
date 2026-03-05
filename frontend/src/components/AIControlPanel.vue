@@ -33,9 +33,12 @@ const props = defineProps<{
   chatMessages: ChatMessage[]
   isLoading: boolean
   gameTypes: GameType[]
-  llmModels: LLMModel[]
+  llmModels: { id: string; name: string; api_key: string; base_url: string }[]
   selectedComponents: string[]
   currentMode: string
+  isModelConfigured: boolean
+  showAddModelModal: boolean
+  newModelForm: { id: string; name: string; api_key: string; base_url: string }
 }>()
 
 const emit = defineEmits<{
@@ -45,6 +48,9 @@ const emit = defineEmits<{
   (e: 'update:selectedGameType', value: string): void
   (e: 'update:selectedComponents', value: string[]): void
   (e: 'update:currentMode', value: string): void
+  (e: 'update:showAddModelModal', value: boolean): void
+  (e: 'update:newModelForm', value: { id: string; name: string; api_key: string; base_url: string }): void
+  (e: 'addModel'): void
   (e: 'send'): void
 }>()
 
@@ -103,6 +109,16 @@ const toggleComponent = (componentId: string) => {
   emit('update:selectedComponents', current)
 }
 
+const updateModelApiKey = (value: string) => {
+  const models = [...props.llmModels]
+  const idx = models.findIndex(m => m.id === props.currentModel)
+  if (idx !== -1) {
+    models[idx].api_key = value
+    emit('update:newModelForm', { ...props.newModelForm, api_key: value })
+    localStorage.setItem('llm_models', JSON.stringify(models))
+  }
+}
+
 // 监听游戏底座变化，清空选中的组件
 watch(
   () => props.selectedGameType,
@@ -121,29 +137,54 @@ watch(
       </h2>
       
       <!-- 模型选择 -->
-      <div class="mb-3">
-        <label class="block text-xs text-slate-400 mb-1">选择模型</label>
-        <select
-          :value="currentModel"
-          @change="emit('update:currentModel', ($event.target as HTMLSelectElement).value)"
-          class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+      <div class="mb-3 flex gap-2">
+        <div class="flex-1">
+          <label class="block text-xs text-slate-400 mb-1">选择模型</label>
+          <select
+            :value="currentModel"
+            @change="emit('update:currentModel', ($event.target as HTMLSelectElement).value)"
+            class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+          >
+            <option v-for="model in llmModels" :key="model.id" :value="model.id">
+              {{ model.name }}
+            </option>
+          </select>
+        </div>
+        <button
+          @click="emit('update:showAddModelModal', true)"
+          class="self-end px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-gray-200 text-sm"
+          title="添加模型"
         >
-          <option v-for="model in llmModels" :key="model.id" :value="model.id">
-            {{ model.name }}
-          </option>
-        </select>
+          ➕
+        </button>
       </div>
       
-      <!-- API Key -->
-      <div>
+      <!-- API Key (按模型显示) -->
+      <div v-if="llmModels.find(m => m.id === currentModel)?.id !== 'ollama'" class="mb-3">
         <label class="block text-xs text-slate-400 mb-1">API Key</label>
         <input
           type="password"
-          :value="apiKey"
-          @input="emit('update:apiKey', ($event.target as HTMLInputElement).value)"
+          :value="llmModels.find(m => m.id === currentModel)?.api_key || ''"
+          @input="updateModelApiKey(($event.target as HTMLInputElement).value)"
           placeholder="sk-xxxxxxxxxxxxxxxx"
           class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
         />
+      </div>
+      
+      <!-- Base URL (如果有) -->
+      <div v-if="llmModels.find(m => m.id === currentModel)?.base_url" class="mb-3">
+        <label class="block text-xs text-slate-400 mb-1">API Base URL</label>
+        <input
+          type="text"
+          :value="llmModels.find(m => m.id === currentModel)?.base_url || ''"
+          readonly
+          class="w-full bg-slate-800/50 border border-slate-700 rounded px-3 py-2 text-sm text-slate-400"
+        />
+      </div>
+      
+      <!-- 未配置警告 -->
+      <div v-if="!isModelConfigured" class="mb-3 p-2 bg-amber-900/30 border border-amber-700 rounded text-xs text-amber-200">
+        ⚠️ 请配置 API Key 后再发送消息
       </div>
     </div>
 
@@ -278,3 +319,60 @@ watch(
     </div>
   </div>
 </template>
+
+<!-- 添加模型弹窗 -->
+<div v-if="showAddModelModal" class="fixed inset-0 z-50 flex items-center justify-center">
+  <div class="absolute inset-0 bg-black/60" @click="emit('update:showAddModelModal', false)"></div>
+  <div class="relative bg-slate-800 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md p-6">
+    <h3 class="text-lg font-bold text-gray-200 mb-4">添加自定义模型</h3>
+    <div class="space-y-4">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">模型标识 (ID)</label>
+        <input
+          v-model="newModelForm.id"
+          placeholder="如: my-gpt4"
+          class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200"
+        />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">显示名称</label>
+        <input
+          v-model="newModelForm.name"
+          placeholder="如: My GPT-4"
+          class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200"
+        />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">API Key</label>
+        <input
+          v-model="newModelForm.api_key"
+          placeholder="sk-..."
+          type="password"
+          class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200"
+        />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Base URL (可选)</label>
+        <input
+          v-model="newModelForm.base_url"
+          placeholder="如: https://api.openai.com/v1"
+          class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-gray-200"
+        />
+      </div>
+    </div>
+    <div class="flex justify-end gap-3 mt-6">
+      <button
+        @click="emit('update:showAddModelModal', false)"
+        class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-gray-200"
+      >
+        取消
+      </button>
+      <button
+        @click="emit('addModel')"
+        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white"
+      >
+        添加
+      </button>
+    </div>
+  </div>
+</div>
